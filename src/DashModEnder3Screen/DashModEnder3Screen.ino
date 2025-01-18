@@ -1,12 +1,16 @@
 #include <SPI.h>
 #include <U8g2lib.h>
 
-#define ENC_PIN 27
+#define LCD_POWER_PIN 27
+#define ENC_PIN 26
 #define LCD_CS_PIN 14
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
+uint lcdState = 1; // 0 = off, 1 = page 1
+#define LCDSTATE_COUNT 2 // number of available states of the lcd
+
 int temp = 40;
 float pressure = 0.15;
 
@@ -15,9 +19,12 @@ TaskHandle_t RenderingTask;
 
 void setup() {
   Serial.begin(115200);
+  pinMode(LCD_POWER_PIN, OUTPUT);
   pinMode(ENC_PIN, INPUT);
+
+  digitalWrite(LCD_POWER_PIN, HIGH); // turn on lcd
   
-  u8g2.begin();
+  u8g2.begin(); // initialize lcd
   u8g2.setFont(u8g2_font_6x10_mr);
 
   showStartupLogo(2500);
@@ -25,28 +32,42 @@ void setup() {
   xTaskCreatePinnedToCore(
                     dataTaskCode,   /* Task function. */
                     "dataTask",     /* name of task. */
-                    10000,       /* Stack size of task */
-                    NULL,        /* parameter of the task */
-                    1,           /* priority of the task */
+                    10000,          /* Stack size of task */
+                    NULL,           /* parameter of the task */
+                    1,              /* priority of the task */
                     &DataTask,      /* Task handle to keep track of created task */
-                    0);          /* pin task to core 0 */ 
+                    0);             /* pin task to core 0 */ 
 
   xTaskCreatePinnedToCore(
-                    renderingTaskCode,   /* Task function. */
-                    "renderingTask",     /* name of task. */
-                    10000,       /* Stack size of task */
-                    NULL,        /* parameter of the task */
-                    1,           /* priority of the task */
-                    &RenderingTask,      /* Task handle to keep track of created task */
-                    1);          /* pin task to core 1 */ 
+                    renderingTaskCode,    /* Task function. */
+                    "renderingTask",      /* name of task. */
+                    10000,                /* Stack size of task */
+                    NULL,                 /* parameter of the task */
+                    1,                    /* priority of the task */
+                    &RenderingTask,       /* Task handle to keep track of created task */
+                    1);                   /* pin task to core 1 */ 
 
 }
 
 void loop() {
   if(digitalRead(ENC_PIN) == 0) {
-    // To be replaced by actual events on button press (cycle display, turn display on/off)
-    Serial.println("Button pressed!");
-    delay(500);
+    Serial.println("Encoder button pressed");
+
+    if(lcdState == 0) {
+      // Turn on lcd
+      Serial.println("Turning on LCD");
+      digitalWrite(LCD_POWER_PIN, HIGH);
+    }
+
+    lcdState = (lcdState + 1) % LCDSTATE_COUNT;
+
+    if(lcdState == 0) {
+      // Turn off lcd
+      Serial.println("Turning off LCD");
+      digitalWrite(LCD_POWER_PIN, LOW);
+    }
+
+    delay(400);
   }
 }
 
@@ -58,7 +79,7 @@ void dataTaskCode(void * params) {
     // Temporary emulation of changing data
     // To be replaced by actual data from the CAN-bus
     temp++;
-    druck += 0.1;
+    pressure += 0.1;
     delay(300);
   }
 
@@ -75,17 +96,23 @@ void renderingTaskCode(void * params) {
 }
 
 void updateDisplay() {
-  u8g2.firstPage();
-  do {
-    u8g2.setCursor(1,8);
-    u8g2.print(" Oiltemp.:");
-    u8g2.setCursor(64, 8);
-    u8g2.print(temp);
-    u8g2.setCursor(1,17);
-    u8g2.print("Oilpress.:");
-    u8g2.setCursor(64,17);
-    u8g2.print(druck);
-  } while ( u8g2.nextPage() );
+  switch(lcdState) {
+    case 0: break;
+
+    case 1:
+      u8g2.firstPage();
+      do {
+        u8g2.setCursor(1,8);
+        u8g2.print(" Oiltemp.:");
+        u8g2.setCursor(64, 8);
+        u8g2.print(temp);
+        u8g2.setCursor(1,17);
+        u8g2.print("Oilpress.:");
+        u8g2.setCursor(64,17);
+        u8g2.print(pressure);
+      } while ( u8g2.nextPage() );
+    break;
+  }
 }
 
 void showStartupLogo(int duration) {
