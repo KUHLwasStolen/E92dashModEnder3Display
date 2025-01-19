@@ -1,8 +1,10 @@
 #include <SPI.h>
 #include <U8g2lib.h>
+#include <mcp2515_can.h>
 
 #define LCD_POWER_PIN 27
 #define ENC_PIN 26
+#define CAN_CS_PIN 5
 #define LCD_CS_PIN 14
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
@@ -10,6 +12,8 @@
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 uint lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
+
+mcp2515_can CAN(CAN_CS_PIN);
 
 int temp = 40;
 float pressure = 0.15;
@@ -28,6 +32,12 @@ void setup() {
   u8g2.setFont(u8g2_font_6x10_mr);
 
   showStartupLogo(2500);
+
+  while (CAN_OK != CAN.begin(CAN_500KBPS)) {
+    Serial.println("CAN BUS Init Failed");
+    delay(100);
+  }
+  Serial.println("CAN BUS Init OK!");
 
   xTaskCreatePinnedToCore(
                     dataTaskCode,   /* Task function. */
@@ -67,7 +77,7 @@ void loop() {
       digitalWrite(LCD_POWER_PIN, LOW);
     }
 
-    delay(400);
+    delay(450); // avoid multiple triggers on one press
   }
 }
 
@@ -75,14 +85,28 @@ void dataTaskCode(void * params) {
   Serial.print("Data task running on core ");
   Serial.println(xPortGetCoreID());
 
-  while(1) {
-    // Temporary emulation of changing data
-    // To be replaced by actual data from the CAN-bus
-    temp++;
-    pressure += 0.1;
-    delay(300);
-  }
+  unsigned char len = 0;
+  unsigned char buf[8];
 
+  while(1) {
+    if (CAN_MSGAVAIL == CAN.checkReceive()) {
+      CAN.readMsgBuf(&len, buf);
+      unsigned long canId = CAN.getCanId();
+
+      Serial.println("-----------------------------");
+      Serial.print("Data from ID: 0x");
+      Serial.println(canId, HEX);
+
+      for (int i = 0; i < len; i++) {
+        Serial.print(buf[i]);
+        Serial.print("\t");
+      }
+
+      Serial.println();
+    }
+
+    delay(1);
+  }
 }
 
 void renderingTaskCode(void * params) {
@@ -103,7 +127,7 @@ void updateDisplay() {
       u8g2.firstPage();
       do {
         u8g2.setCursor(1,8);
-        u8g2.print(" Oiltemp.:");
+        u8g2.print("Oiltemp. :");
         u8g2.setCursor(64, 8);
         u8g2.print(temp);
         u8g2.setCursor(1,17);
