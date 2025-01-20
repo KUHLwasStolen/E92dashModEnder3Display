@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include <U8g2lib.h>
-#include <mcp2515_can.h>
+#include <mcp2515.h>
 
 #define LCD_POWER_PIN 27
 #define ENC_PIN 26
@@ -13,7 +13,8 @@ U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN)
 uint lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
 
-mcp2515_can CAN(CAN_CS_PIN);
+struct can_frame canMsg;
+struct MCP2515 mcp2515(CAN_CS_PIN); // CS pin is GPIO 5
 
 int temp = 40;
 float pressure = 0.15;
@@ -33,11 +34,11 @@ void setup() {
 
   showStartupLogo(2500);
 
-  while (CAN_OK != CAN.begin(CAN_500KBPS)) {
-    Serial.println("CAN BUS Init Failed");
-    delay(100);
-  }
-  Serial.println("CAN BUS Init OK!");
+  SPI.begin();
+
+  mcp2515.reset();
+  mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
+  mcp2515.setNormalMode();
 
   xTaskCreatePinnedToCore(
                     dataTaskCode,   /* Task function. */
@@ -85,24 +86,9 @@ void dataTaskCode(void * params) {
   Serial.print("Data task running on core ");
   Serial.println(xPortGetCoreID());
 
-  unsigned char len = 0;
-  unsigned char buf[8];
-
   while(1) {
-    if (CAN_MSGAVAIL == CAN.checkReceive()) {
-      CAN.readMsgBuf(&len, buf);
-      unsigned long canId = CAN.getCanId();
-
-      Serial.println("-----------------------------");
-      Serial.print("Data from ID: 0x");
-      Serial.println(canId, HEX);
-
-      for (int i = 0; i < len; i++) {
-        Serial.print(buf[i]);
-        Serial.print("\t");
-      }
-
-      Serial.println();
+    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
+      Serial.println("Message received!!!");
     }
 
     delay(1);
