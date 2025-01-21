@@ -1,26 +1,26 @@
 #include <SPI.h>
 #include <U8g2lib.h>
-#include <mcp2515.h>
+#include <mcp2515_can.h>
 
 #define LCD_POWER_PIN 27
 #define ENC_PIN 26
-#define CAN_CS_PIN 5
 #define LCD_CS_PIN 14
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
+#define CAN_CS_PIN 5
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 uint lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
 
-struct can_frame canMsg;
-struct MCP2515 mcp2515(CAN_CS_PIN); // CS pin is GPIO 5
+mcp2515_can CAN(CAN_CS_PIN);
 
 int temp = 40;
 float pressure = 0.15;
 
 TaskHandle_t DataTask;
 TaskHandle_t RenderingTask;
+TaskHandle_t UserInputTask;
 
 void setup() {
   Serial.begin(115200);
@@ -34,64 +34,99 @@ void setup() {
 
   showStartupLogo(2500);
 
-  SPI.begin();
-
-  mcp2515.reset();
-  mcp2515.setBitrate(CAN_500KBPS, MCP_8MHZ);
-  mcp2515.setNormalMode();
-
-  xTaskCreatePinnedToCore(
-                    dataTaskCode,   /* Task function. */
-                    "dataTask",     /* name of task. */
-                    10000,          /* Stack size of task */
-                    NULL,           /* parameter of the task */
-                    1,              /* priority of the task */
-                    &DataTask,      /* Task handle to keep track of created task */
-                    0);             /* pin task to core 0 */ 
+  /* ATTENTION: We are interfacing a 500KBPS CAN bus but need to use the 1000KBPS variable
+     This is needed because the library expects a MCP module with a 16MHz crystal on it
+     Check if your crystal (usually shiny, oval) has an 8 or 16 written on it
+     if 8 --> use CAN_1000KBPS          if 16 --> use CAN_500KBPS
+     This also applies to other CAN bus speeds of course, always double the speed if you have an 8MHz crystal */
+  while (CAN_OK != CAN.begin(CAN_1000KBPS)) {
+    Serial.println("CAN bus init failed! Retrying in 250...");
+    displayErrorMessage("CAN init failed!");
+    delay(250);
+  }
+  Serial.println("CAN bus initialized successfully");
 
   xTaskCreatePinnedToCore(
-                    renderingTaskCode,    /* Task function. */
-                    "renderingTask",      /* name of task. */
-                    10000,                /* Stack size of task */
-                    NULL,                 /* parameter of the task */
-                    1,                    /* priority of the task */
-                    &RenderingTask,       /* Task handle to keep track of created task */
-                    1);                   /* pin task to core 1 */ 
+                    dataTaskCode,   // Task function.
+                    "dataTask",     // name of task.
+                    10000,          // Stack size of task
+                    NULL,           // parameter of the task
+                    1,              // priority of the task
+                    &DataTask,      // Task handle to keep track of created task
+                    1);             // pin task to core 0
+
+  xTaskCreatePinnedToCore(
+                    renderingTaskCode,    // Task function
+                    "renderingTask",      // name of task
+                    10000,                // Stack size of task
+                    NULL,                 // parameter of the task
+                    1,                    // priority of the task
+                    &RenderingTask,       // Task handle to keep track of created task
+                    0);                   // pin task to core 1
+
+  xTaskCreatePinnedToCore(
+                    userInputTaskCode,    // Task function
+                    "userInputTask",      // name of task
+                    10000,                // Stack size of task
+                    NULL,                 // parameter of the task
+                    1,                    // priority of the task
+                    &UserInputTask,       // Task handle to keep track of created task
+                    0);                   // pin task to core 1
 
 }
 
 void loop() {
-  if(digitalRead(ENC_PIN) == 0) {
-    Serial.println("Encoder button pressed");
-
-    if(lcdState == 0) {
-      // Turn on lcd
-      Serial.println("Turning on LCD");
-      digitalWrite(LCD_POWER_PIN, HIGH);
-    }
-
-    lcdState = (lcdState + 1) % LCDSTATE_COUNT;
-
-    if(lcdState == 0) {
-      // Turn off lcd
-      Serial.println("Turning off LCD");
-      digitalWrite(LCD_POWER_PIN, LOW);
-    }
-
-    delay(450); // avoid multiple triggers on one press
-  }
 }
 
 void dataTaskCode(void * params) {
   Serial.print("Data task running on core ");
   Serial.println(xPortGetCoreID());
 
+  unsigned char len = 0;
+  unsigned char buf[8];
+
   while(1) {
-    if (mcp2515.readMessage(&canMsg) == MCP2515::ERROR_OK) {
-      Serial.println("Message received!!!");
+    if (CAN_MSGAVAIL == CAN.checkReceive()) {
+      CAN.readMsgBuf(&len, buf);
+      unsigned long canId = CAN.getCanId();
+
+      Serial.print("Data from ID: 0x");
+      Serial.println(canId, HEX);
+      for (int i = 0; i < len; i++) {
+        Serial.print(buf[i]);
+        Serial.print("\t");
+      }
+      Serial.println();
+    }
+  }
+}
+
+void userInputTaskCode(void * params) {
+  Serial.print("User input task running on core ");
+  Serial.println(xPortGetCoreID());
+
+  while(1) {
+    if(digitalRead(ENC_PIN) == 0) {
+      Serial.println("Encoder button pressed");
+
+      if(lcdState == 0) {
+        // Turn on lcd
+        Serial.println("Turning on LCD");
+        digitalWrite(LCD_POWER_PIN, HIGH);
+      }
+
+      lcdState = (lcdState + 1) % LCDSTATE_COUNT;
+
+      if(lcdState == 0) {
+        // Turn off lcd
+        Serial.println("Turning off LCD");
+        digitalWrite(LCD_POWER_PIN, LOW);
+      }
+
+      delay(450); // avoid multiple triggers on one press
     }
 
-    delay(1);
+    delay(1); // to avoid triggering the watchdog timeout
   }
 }
 
@@ -105,6 +140,7 @@ void renderingTaskCode(void * params) {
   }
 }
 
+// displays the current vehicle information
 void updateDisplay() {
   switch(lcdState) {
     case 0: break;
@@ -125,6 +161,16 @@ void updateDisplay() {
   }
 }
 
+// displays a simple one line string on the lcd
+void displayErrorMessage(char * message) {
+  u8g2.firstPage();
+  do {
+    u8g2.setCursor(1,8);
+    u8g2.print(message);
+  } while ( u8g2.nextPage() );
+}
+
+// displays a simple BMW logo on the lcd for the given amount of time
 void showStartupLogo(int duration) {
   // 'bmw-2-logo-png-transparent', 128x64px
   const unsigned char bmwLogo [] PROGMEM = {
