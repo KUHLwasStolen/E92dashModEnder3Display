@@ -13,10 +13,10 @@ U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN)
 uint lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
 
-mcp2515_can CAN(CAN_CS_PIN);
+bool clutchPressed = true;
+bool brakePressed = false;
 
-int temp = 40;
-float pressure = 0.15;
+mcp2515_can CAN(CAN_CS_PIN);
 
 TaskHandle_t DataTask;
 TaskHandle_t RenderingTask;
@@ -53,7 +53,7 @@ void setup() {
                     NULL,           // parameter of the task
                     1,              // priority of the task
                     &DataTask,      // Task handle to keep track of created task
-                    1);             // pin task to core 0
+                    1);             // pin task to core 1
 
   xTaskCreatePinnedToCore(
                     renderingTaskCode,    // Task function
@@ -62,7 +62,7 @@ void setup() {
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &RenderingTask,       // Task handle to keep track of created task
-                    0);                   // pin task to core 1
+                    0);                   // pin task to core 0
 
   xTaskCreatePinnedToCore(
                     userInputTaskCode,    // Task function
@@ -71,12 +71,14 @@ void setup() {
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &UserInputTask,       // Task handle to keep track of created task
-                    0);                   // pin task to core 1
+                    0);                   // pin task to core 0
 
 }
+
 
 void loop() {
 }
+
 
 void dataTaskCode(void * params) {
   Serial.print("Data task running on core ");
@@ -93,13 +95,14 @@ void dataTaskCode(void * params) {
       Serial.print("Data from ID: 0x");
       Serial.println(canId, HEX);
       for (int i = 0; i < len; i++) {
-        Serial.print(buf[i]);
+        Serial.print(buf[i], HEX);
         Serial.print("\t");
       }
       Serial.println();
     }
   }
 }
+
 
 void userInputTaskCode(void * params) {
   Serial.print("User input task running on core ");
@@ -130,6 +133,7 @@ void userInputTaskCode(void * params) {
   }
 }
 
+
 void renderingTaskCode(void * params) {
   Serial.print("Rendering task running on core ");
   Serial.println(xPortGetCoreID());
@@ -140,22 +144,40 @@ void renderingTaskCode(void * params) {
   }
 }
 
+
 // displays the current vehicle information
 void updateDisplay() {
   switch(lcdState) {
     case 0: break;
 
+    // Any constant values here are only placeholders
     case 1:
       u8g2.firstPage();
       do {
-        u8g2.setCursor(1,8);
-        u8g2.print("Oiltemp. :");
-        u8g2.setCursor(64, 8);
-        u8g2.print(temp);
-        u8g2.setCursor(1,17);
-        u8g2.print("Oilpress.:");
-        u8g2.setCursor(64,17);
-        u8g2.print(pressure);
+        u8g2.drawStr(1, 8, "Enginetemp.:");
+        u8g2.drawUTF8(81, 8, "-90 C");
+
+        // Calculated engine power from torque and rpm
+        u8g2.drawStr(1, 18, "Enginepower:");
+        u8g2.drawStr(81, 18, "-100 kW");
+
+        u8g2.drawStr(1, 28, "Torque     :");
+        u8g2.drawStr(81, 28, "-200 Nm");
+
+        u8g2.drawStr(1, 38, "Battvoltage:");
+        u8g2.drawStr(81, 38, "12.41 V");
+
+        // Clutch status
+        u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
+
+        // Brake status
+        u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
+
+        // Throttle position
+        u8g2.drawBox(0, 55, 89, 5);
+
+        // Steering angle
+        u8g2.drawBox(64, 61, 64, 3);
       } while ( u8g2.nextPage() );
     break;
   }

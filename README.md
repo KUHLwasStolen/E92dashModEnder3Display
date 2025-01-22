@@ -24,4 +24,24 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | ESP32-WROOM-32 dev module | 1 | most other ESPs should also work, just connect everything to the right GPIOs | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
 | MCP2515 CAN bus module | 1 | yes, odd choice in combination with ESP32, I just use what I already had | https://www.az-delivery.de/en/products/mcp2515-can-bus-modul?_pos=1&_psq=MCP2515&_ss=e&_v=1.0 |
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
+| 10k Ohm resistor | 1 | used as a pullup, similar values may also work |  |
+| 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
+| BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
+| S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
 | Jumper wires | 1 metric ton | will be replaced in the future by a less prototypie solution | |
+
+## References
+Here you can find some links with useful information in relation to this project.  
+
+**CAN bus related**
+| Description | Link |
+|---|---|
+| Awesome work on decoding the BMW CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulars *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
+| A table I found with CAN bus IDs of the E9X and their meanings | https://github.com/kmalinich/node-bmw-ref/blob/master/canbus/e90-tool32-ids.csv |
+
+**Hardware related**
+| Description | Link |
+|---|---|
+| My source for the Ender3 LCD pinout | https://github.com/rfblock/ender3-lcd-arduino |
+| Library used to drive LCD (can be downloaded via Arduino IDE) | https://github.com/olikraus/u8g2 |
+| Library used to drive MCP2515 module (can be downloaded via Arduino IDE) | https://github.com/ttlappalainen/CAN_BUS_Shield |
