@@ -2,6 +2,9 @@
 #include <U8g2lib.h>
 #include <mcp2515_can.h>
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+
 #define LCD_POWER_PIN 27
 #define ENC_PIN 26
 #define LCD_CS_PIN 14
@@ -10,11 +13,17 @@
 #define CAN_CS_PIN 5
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-uint lcdState = 1; // 0 = off, 1 = page 1
+unsigned char lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
 
 bool clutchPressed = true;
 bool brakePressed = false;
+short engineTemp = 91;
+unsigned short engineRpm = 3945;
+double engineTorque = 319.1948347;
+double batteryVoltage = 12.41123;
+double throttlePercentage = 0.6789; // throttle from 0 (foot off paddle) to 1 (flat)
+double steeringPosition = 0.4567; // -1 -> fully to the left, 0 -> centered, 1 -> fully to the right
 
 mcp2515_can CAN(CAN_CS_PIN);
 
@@ -148,24 +157,30 @@ void renderingTaskCode(void * params) {
 // displays the current vehicle information
 void updateDisplay() {
   switch(lcdState) {
+    // lcd off case
     case 0: break;
 
-    // Any constant values here are only placeholders
+    // displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition 
     case 1:
+      char outputStr[10];
       u8g2.firstPage();
       do {
         u8g2.drawStr(1, 8, "Enginetemp.:");
-        u8g2.drawUTF8(81, 8, "-90 C");
+        getEngineTempStr(outputStr);
+        u8g2.drawUTF8(81, 8, outputStr);
 
         // Calculated engine power from torque and rpm
         u8g2.drawStr(1, 18, "Enginepower:");
-        u8g2.drawStr(81, 18, "-100 kW");
+        getEnginePowerStr(outputStr);
+        u8g2.drawStr(81, 18, outputStr);
 
         u8g2.drawStr(1, 28, "Torque     :");
-        u8g2.drawStr(81, 28, "-200 Nm");
+        getEngineTorqueStr(outputStr);
+        u8g2.drawStr(81, 28, outputStr);
 
         u8g2.drawStr(1, 38, "Battvoltage:");
-        u8g2.drawStr(81, 38, "12.41 V");
+        getBatteryVoltageStr(outputStr);
+        u8g2.drawStr(81, 38, outputStr);
 
         // Clutch status
         u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
@@ -174,15 +189,96 @@ void updateDisplay() {
         u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
 
         // Throttle position
-        u8g2.drawBox(0, 55, 89, 5);
+        u8g2.drawBox(0, 55, round(throttlePercentage * 128.0d), 5);
 
-        // Steering angle
-        u8g2.drawBox(64, 61, 64, 3);
+        // Steering position
+        int barWidth = round(steeringPosition * 64.0d);
+        if(barWidth >= 0) {
+          u8g2.drawBox(64, 61, barWidth, 3);
+        } else {
+          u8g2.drawBox(64 + barWidth, 61, abs(barWidth), 3);
+        }
+        
       } while ( u8g2.nextPage() );
     break;
   }
 }
 
+
+// ### Rendering helper methods ###
+void getEngineTempStr(char* tempStr) {
+  sprintf(tempStr, "%+d C", engineTemp);
+}
+
+void getEnginePowerStr(char* powStr) {
+  double enginePower = ((double)engineRpm * engineTorque * ((2.0d * PI) / 60.0d)) / 1000.0d;
+  sprintf(powStr, "%d kW", (int)abs(round(enginePower)));
+}
+
+void getEngineTorqueStr(char* torqueStr) {
+  sprintf(torqueStr, "%d Nm", (int)abs(round(engineTorque)));
+}
+
+void getBatteryVoltageStr(char* voltStr) {
+  sprintf(voltStr, "%.2lf V", batteryVoltage);
+}
+
+
+// ### CAN conversion methods ordered by ID ###
+// from 0x0AA
+void setEngineRpm(unsigned char byte4, unsigned char byte5) {
+  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
+}
+
+// from 0x0AA
+void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
+  // value between 255 and 65064 (don't ask me why)
+  unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
+
+  throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
+}
+
+// from 0x0A8
+void setEngineTorque(unsigned char byte1, unsigned char byte2) {
+  // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
+
+  signed short combined = ((unsigned short)byte2 << 8) + (unsigned short)byte1;
+  engineTorque = (double)combined / 32.0d;
+}
+
+// from 0x0A8
+void setClutchPressed(unsigned char byte5) {
+  unsigned char shifted = byte5 << 7; // only interested in first bit, shift rest out
+
+  if(shifted == 128) {
+    clutchPressed = true;
+  } else {
+    clutchPressed = false;
+  }
+}
+
+// from 0x0A8
+void setBrakePressed(unsigned char byte7) {
+  if(byte7 > 20) {
+    brakePressed = true;
+  } else {
+    brakePressed = false;
+  }
+}
+
+// from 0x1D0
+void setEngineTemp(unsigned char byte0) {
+  engineTemp = (signed short)byte0 - 48;
+}
+
+// from 0x3B4
+void setBatteryVoltage(unsigned char byte0, unsigned char byte1) {
+  // (((Byte[1]-240 )*256)+Byte[0])/68 
+  batteryVoltage = (double)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0d;
+}
+
+
+// ### General visual helper methods
 // displays a simple one line string on the lcd
 void displayErrorMessage(char * message) {
   u8g2.firstPage();
