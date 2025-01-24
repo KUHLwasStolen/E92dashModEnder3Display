@@ -14,7 +14,7 @@
 				)
 			)
 		)
-		(property "Value" ""
+		(property "Value" "Ender 3 LCD (EXP3)"
 			(at 0 0 0)
 			(effects
 				(font
@@ -40,7 +40,16 @@
 				(hide yes)
 			)
 		)
-		(property "Description" ""
+		(property "Description" "Connector pinout of the Ender 3 LCD (rightmost connector EXP3, cutout on the left indicated by the black rectangle)"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "LCD"
 			(at 0 0 0)
 			(effects
 				(font
@@ -50,6 +59,18 @@
 			)
 		)
 		(symbol "Ender3lcd12864_0_1"
+			(rectangle
+				(start -8 5.08)
+				(end -7.2 -5.08)
+				(stroke
+					(width 0)
+					(type default)
+					(color 0 0 0 0.6274509804)
+				)
+				(fill
+					(type outline)
+				)
+			)
 			(rectangle
 				(start -7.62 12.7)
 				(end 7.62 -12.7)
