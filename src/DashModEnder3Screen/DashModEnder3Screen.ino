@@ -23,7 +23,7 @@ unsigned short engineRpm = 3945;
 double engineTorque = 319.1948347;
 double batteryVoltage = 12.41123;
 double throttlePercentage = 0.6789; // throttle from 0 (foot off paddle) to 1 (flat)
-double steeringPosition = 0.4567; // -1 -> fully to the left, 0 -> centered, 1 -> fully to the right
+double steeringPosition = 0.4567; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 
 mcp2515_can CAN(CAN_CS_PIN);
 
@@ -225,19 +225,6 @@ void getBatteryVoltageStr(char* voltStr) {
 
 
 // ### CAN conversion methods ordered by ID ###
-// from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5) {
-  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
-}
-
-// from 0x0AA
-void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
-  // value between 255 and 65064 (don't ask me why)
-  unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
-
-  throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
-}
-
 // from 0x0A8
 void setEngineTorque(unsigned char byte1, unsigned char byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
@@ -264,6 +251,28 @@ void setBrakePressed(unsigned char byte7) {
   } else {
     brakePressed = false;
   }
+}
+
+// from 0x0AA
+void setEngineRpm(unsigned char byte4, unsigned char byte5) {
+  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
+}
+
+// from 0x0AA
+void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
+  // value between 255 and 65064 (don't ask me why)
+  unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
+
+  throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
+}
+
+// from 0x0C8
+void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
+  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23
+  // negative means to the left and positive to the right --> value between -12800 and +12800
+  signed short combined = ((unsigned short)byte1 << 8) + (unsigned short) byte0;
+
+  steeringPosition = (double)combined / 12800.0d;
 }
 
 // from 0x1D0
