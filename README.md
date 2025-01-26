@@ -6,6 +6,17 @@ The project should be compatible with all cars from the E9x series, but I only h
 
 The project currently is in a **very** early stage and more information will be added *soon*.  
 
+## Plan
+The plan is to tap into the CAN-bus somewhere on the vehicle to gather interesting information.  
+From my research it seems the best bus to tap into is the KCAN (Karosserie-CAN = Body-CAN), because it contains the most interesting information.  
+The speed of the bus is 100 kbit/s and it can be recognized by its twisted pair of orange/green and green wires, where OR/GN stands for CAN-HIGH and GN for CAN-LOW (to be confirmed).  
+On my vehicle the easiest place to tap into KCAN seems to be by the rear PDC (park distance control) module.  
+This module might not be installed on your car.  
+Alternatives include the iDrive and ultrasonic overhead alarm sensor, which are both not installed nor prewired on my car.  
+The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car...  
+But at least for testing it seems to be the most promising location to me.  
+Again, this may vary depending on the options installed in your car.
+
 ## Schematic
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
 I am not an expert at designing circuits and just want to give you a general idea about the correct wiring.  
@@ -36,6 +47,7 @@ Here you can find some links with useful information in relation to this project
 **CAN bus related**
 | Description | Link |
 |---|---|
+| This thread contains **A LOT** of information about the E9x KCAN, but it is also kind of all over the place so you have to dig a bit | https://www.e90post.com/forums/showthread.php?t=177272 |
 | Awesome work on decoding the BMW CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulars *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
 | A table I found with CAN bus IDs of the E9X and their meanings | https://github.com/kmalinich/node-bmw-ref/blob/master/canbus/e90-tool32-ids.csv |
 
