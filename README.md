@@ -10,12 +10,21 @@ The project currently is in a **very** early stage and more information will be 
 The plan is to tap into the CAN-bus somewhere on the vehicle to gather interesting information.  
 From my research it seems the best bus to tap into is the KCAN (Karosserie-CAN = Body-CAN), because it contains the most interesting information.  
 The speed of the bus is 100 kbit/s and it can be recognized by its twisted pair of orange/green and green wires, where OR/GN stands for CAN-HIGH and GN for CAN-LOW (to be confirmed).  
+
 On my vehicle the easiest place to tap into KCAN seems to be by the rear PDC (park distance control) module.  
 This module might not be installed on your car.  
-Alternatives include the iDrive and ultrasonic overhead alarm sensor, which are both not installed nor prewired on my car.  
+Alternatives include the iDrive and ultrasonic overhead alarm sensor, which are both not installed nor pre-wired on my car.  
 The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car...  
 But at least for testing it seems to be the most promising location to me.  
-Again, this may vary depending on the options installed in your car.
+Again, this may vary depending on the options installed in your car.  
+
+**Update:** After thinking about it for a while and after some additional research, I have come to the conclusion that it is probably best to deviate from the originally planned all-in-one solution.  
+I am now pretty sure that I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
+Then I want another ESP32 with the LCD on the dash of the car.  
+Communication between them is handled via ESP-NOW.  
+This solution avoids having to run long wires through the car or having to tap into the KCAN in places where I'm not comfortable.  
+Another advantage is that this allows us to expand the network of devices in the car pretty easily.  
+I still have to test if this approach is viable, regarding delay, reliability and so on, but from my research it seems promising...
 
 ## Schematic
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
@@ -27,7 +36,7 @@ Here you can find a list of materials needed for the project.
 Note that this list always reflects the current state of the project and might change over time.  
 Also note that links to products are only meant as a guide what to look for and what/where ***I*** bought them.  
 Depending on your location/preference there might be better/cheaper alternatives.  
-You can buy the components whereever you want as long as they are the same/similar enough.  
+You can buy the components wherever you want as long as they are the same/similar enough.  
 I am in no way affiliated with the linked sellers and can in no way guarantee their reliability!  
 
 | Description | Quantity | Notes | Link |
@@ -48,7 +57,7 @@ Here you can find some links with useful information in relation to this project
 | Description | Link |
 |---|---|
 | This thread contains **A LOT** of information about the E9x KCAN, but it is also kind of all over the place so you have to dig a bit | https://www.e90post.com/forums/showthread.php?t=177272 |
-| Awesome work on decoding the BMW CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulars *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
+| Awesome work on decoding the BMW CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulas *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
 | A table I found with CAN bus IDs of the E9X and their meanings | https://github.com/kmalinich/node-bmw-ref/blob/master/canbus/e90-tool32-ids.csv |
 
 **Hardware related**
