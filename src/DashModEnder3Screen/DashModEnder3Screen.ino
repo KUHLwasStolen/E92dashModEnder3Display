@@ -25,6 +25,9 @@ double batteryVoltage = 12.41123;
 double throttlePercentage = 0.6789; // throttle from 0 (foot off paddle) to 1 (flat)
 double steeringPosition = 0.4567; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 
+// 0xA8, 0xAA, 0xC8, 0x1D0, 0x3B4
+unsigned char interestIds[5] = {0}; // temporary to see if we find all interesting IDs
+
 mcp2515_can CAN(CAN_CS_PIN);
 
 TaskHandle_t DataTask;
@@ -43,12 +46,12 @@ void setup() {
 
   showStartupLogo(2500);
 
-  /* ATTENTION: We are interfacing a 500KBPS CAN bus but need to use the 1000KBPS variable
+  /* ATTENTION: We are interfacing a 100KBPS CAN bus but need to use the 200KBPS variable
      This is needed because the library expects a MCP module with a 16MHz crystal on it
      Check if your crystal (usually shiny, oval) has an 8 or 16 written on it
-     if 8 --> use CAN_1000KBPS          if 16 --> use CAN_500KBPS
+     if 8 --> use CAN_200KBPS          if 16 --> use CAN_100KBPS
      This also applies to other CAN bus speeds of course, always double the speed if you have an 8MHz crystal */
-  while (CAN_OK != CAN.begin(CAN_1000KBPS)) {
+  while (CAN_OK != CAN.begin(CAN_200KBPS)) {
     Serial.println("CAN bus init failed! Retrying in 250...");
     displayErrorMessage("CAN init failed!");
     delay(250);
@@ -101,13 +104,24 @@ void dataTaskCode(void * params) {
       CAN.readMsgBuf(&len, buf);
       unsigned long canId = CAN.getCanId();
 
-      Serial.print("Data from ID: 0x");
-      Serial.println(canId, HEX);
-      for (int i = 0; i < len; i++) {
-        Serial.print(buf[i], HEX);
-        Serial.print("\t");
+      // 0xA8, 0xAA, 0xC8, 0x1D0, 0x3B4
+      switch(canId) {
+        case 0xA8:
+          interestIds[0] = 1;
+          break;
+        case 0xAA:
+          interestIds[1] = 1;
+          break;
+        case 0xC8:
+          interestIds[2] = 1;
+          break;
+        case 0x1D0:
+          interestIds[3] = 1;
+          break;
+        case 0x3B4:
+          interestIds[4] = 1;
+          break;
       }
-      Serial.println();
     }
   }
 }
@@ -121,6 +135,14 @@ void userInputTaskCode(void * params) {
     if(digitalRead(ENC_PIN) == 0) {
       Serial.println("Encoder button pressed");
 
+      // Print interestIds array
+      Serial.print("interestIds = ");
+      for(int i = 0; i < 5; i++) {
+        Serial.print(interestIds[i]);
+        Serial.print("\t");
+      }
+      Serial.print("\n");
+      
       if(lcdState == 0) {
         // Turn on lcd
         Serial.println("Turning on LCD");
