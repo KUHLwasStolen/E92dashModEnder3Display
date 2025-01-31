@@ -2,29 +2,50 @@
 Chaotic name, simple mission.  
 I have the old LCD from my Creality Ender 3 Pro, which I don't need anymore, because I'm running it headless with Klipper and I want to use it to display some additional information on the dash of my BMW E92.  
 
-The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
+The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.    
 
-The project currently is in a **very** early stage and more information will be added *soon*.  
+## !!!Disclaimer!!!
+Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
+Not only for your car, but also for your health!  
+Before attempting any of the described modifications in this repository, **fully** read and **fully** understand everything in this README.  
+I do **not** take responsibility for any type of damages, that may occur as a result of the modifications shown here.  
+Do this on your own risk.
 
 ## Plan
 The plan is to tap into the CAN-bus somewhere on the vehicle to gather interesting information.  
 From my research it seems the best bus to tap into is the KCAN (Karosserie-CAN = Body-CAN), because it contains the most interesting information.  
-The speed of the bus is 100 kbit/s and it can be recognized by its twisted pair of orange/green and green wires, where OR/GN stands for CAN-HIGH and GN for CAN-LOW (to be confirmed).  
+The speed of the bus is 100 kbit/s and it can be recognized by its twisted pair of orange/green and green wires, where OR/GN stands for CAN-HIGH and GN for CAN-LOW.  
 
 On my vehicle the easiest place to tap into KCAN seems to be by the rear PDC (park distance control) module.  
 This module might not be installed on your car.  
 Alternatives include the iDrive and ultrasonic overhead alarm sensor, which are both not installed nor pre-wired on my car.  
-The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car...  
-But at least for testing it seems to be the most promising location to me.  
+The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car... (see below)  
+But at least for testing it seems to be the most promising and safest location to me.  
 Again, this may vary depending on the options installed in your car.  
 
-**Update:** After thinking about it for a while and after some additional research, I have come to the conclusion that it is probably best to deviate from the originally planned all-in-one solution.  
+**Update:** To solve the problem with the ESP in the trunk and display in the front, I have come to the conclusion that it is probably best to deviate from the originally planned all-in-one solution.  
 I am now pretty sure that I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
 Then I want another ESP32 with the LCD on the dash of the car.  
 Communication between them is handled via ESP-NOW.  
 This solution avoids having to run long wires through the car or having to tap into the KCAN in places where I'm not comfortable.  
 Another advantage is that this allows us to expand the network of devices in the car pretty easily.  
 I still have to test if this approach is viable, regarding delay, reliability and so on, but from my research it seems promising...
+
+### Relevant information from KCAN
+| CAN-ID | Description | Successful? |
+|---|---|---|
+| 0x0A8 | Engine torque to compute power, brake and clutch status | Yes |
+| 0x0AA | Throttle position, engine RPM | Yes |
+| 0x0C8 | Steering wheel angle/position | Yes |
+| 0x1D0 | Engine temperature | Yes |
+| 0x1D6 | Steering wheel buttons as not all of them do something in my car | To be attempted |
+| 0x3B4 | Battery voltage | Yes |
+
+## Execution of the plan
+Tapping into the KCAN in the trunk of the car was successful.  
+I have received all of the expected IDs and the data seems to be accurate/converted properly, which I still have to verify in more detail.  
+**Tip:** If you are attempting the same procedure as me, remove the trim panels in the battery area, not only the battery cover.  
+I did not and it was *very* tedious due to the space constraints (2 hours for splicing 2 wires).
 
 ## Schematic
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
