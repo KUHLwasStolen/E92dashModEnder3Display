@@ -25,9 +25,6 @@ double batteryVoltage = 12.41123;
 double throttlePercentage = 0.6789; // throttle from 0 (foot off paddle) to 1 (flat)
 double steeringPosition = 0.4567; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 
-// 0xA8, 0xAA, 0xC8, 0x1D0, 0x3B4
-unsigned char interestIds[5] = {0}; // temporary to see if we find all interesting IDs
-
 mcp2515_can CAN(CAN_CS_PIN);
 
 TaskHandle_t DataTask;
@@ -100,26 +97,33 @@ void dataTaskCode(void * params) {
   unsigned char buf[8];
 
   while(1) {
-    if (CAN_MSGAVAIL == CAN.checkReceive()) {
+    if (CAN_MSGAVAIL == CAN.checkReceive()) { // Message received
       CAN.readMsgBuf(&len, buf);
       unsigned long canId = CAN.getCanId();
 
-      // 0xA8, 0xAA, 0xC8, 0x1D0, 0x3B4
+      // If interesting ID received, set corresponding values
       switch(canId) {
         case 0xA8:
-          interestIds[0] = 1;
+          setEngineTorque(buf[1], buf[2]);
+          setClutchPressed(buf[5]);
+          setBrakePressed(buf[7]);
           break;
+
         case 0xAA:
-          interestIds[1] = 1;
+          setThrottlePercentage(buf[2], buf[3]);
+          setEngineRpm(buf[4], buf[5]);
           break;
+
         case 0xC8:
-          interestIds[2] = 1;
+          setSteeringPosition(buf[0], buf[1]);
           break;
+
         case 0x1D0:
-          interestIds[3] = 1;
+          setEngineTemp(buf[0]);
           break;
+
         case 0x3B4:
-          interestIds[4] = 1;
+          setBatteryVoltage(buf[0], buf[1]);
           break;
       }
     }
@@ -134,14 +138,6 @@ void userInputTaskCode(void * params) {
   while(1) {
     if(digitalRead(ENC_PIN) == 0) {
       Serial.println("Encoder button pressed");
-
-      // Print interestIds array
-      Serial.print("interestIds = ");
-      for(int i = 0; i < 5; i++) {
-        Serial.print(interestIds[i]);
-        Serial.print("\t");
-      }
-      Serial.print("\n");
       
       if(lcdState == 0) {
         // Turn on lcd
@@ -276,16 +272,16 @@ void setBrakePressed(unsigned char byte7) {
 }
 
 // from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5) {
-  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
-}
-
-// from 0x0AA
 void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
   // value between 255 and 65064 (don't ask me why)
   unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
 
   throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
+}
+
+// from 0x0AA
+void setEngineRpm(unsigned char byte4, unsigned char byte5) {
+  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
 }
 
 // from 0x0C8
