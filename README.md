@@ -6,7 +6,7 @@ The project should be compatible with all cars from the E9x series, but I only h
 
 ## !!!Disclaimer!!!
 Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
-Not only for your car, but also for your health!  
+Dangerous not only for your car, but also for your health!  
 Before attempting any of the described modifications in this repository, **fully** read and **fully** understand everything in this README.  
 I do **not** take responsibility for any type of damages, that may occur as a result of the modifications shown here.  
 Do this on your own risk.
@@ -38,7 +38,7 @@ I still have to test if this approach is viable, regarding delay, reliability an
 | 0x0AA | Throttle position, engine RPM | Yes |
 | 0x0C8 | Steering wheel angle/position | Yes |
 | 0x1D0 | Engine temperature | Yes |
-| 0x1D6 | Steering wheel buttons as not all of them do something in my car | To be attempted |
+| 0x1D6 | Steering wheel buttons as not all of them do something in my car | To be tested |
 | 0x3B4 | Battery voltage | Yes |
 
 ## Execution of the plan

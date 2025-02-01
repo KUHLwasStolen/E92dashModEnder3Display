@@ -18,6 +18,7 @@ unsigned char lcdState = 1; // 0 = off, 1 = page 1
 
 bool clutchPressed = true;
 bool brakePressed = false;
+unsigned char steeringWheelButtons = 0; // each bit one button: 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
 short engineTemp = 91;
 unsigned short engineRpm = 3945;
 double engineTorque = 319.1948347;
@@ -120,6 +121,10 @@ void dataTaskCode(void * params) {
 
         case 0x1D0:
           setEngineTemp(buf[0]);
+          break;
+
+        case 0x1D6:
+          setSteeringWheelButtons(buf[0], buf[1]);
           break;
 
         case 0x3B4:
@@ -255,7 +260,7 @@ void setEngineTorque(unsigned char byte1, unsigned char byte2) {
 void setClutchPressed(unsigned char byte5) {
   unsigned char shifted = byte5 << 7; // only interested in first bit, shift rest out
 
-  if(shifted == 128) {
+  if(shifted) {
     clutchPressed = true;
   } else {
     clutchPressed = false;
@@ -286,8 +291,8 @@ void setEngineRpm(unsigned char byte4, unsigned char byte5) {
 
 // from 0x0C8
 void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
-  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23
-  // negative means to the left and positive to the right --> value between -12800 and +12800
+  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23 and the max steering angle is 600°
+  // negative means to the left and positive to the right --> value between -12800 and +12800 (-600° and 600°)
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short) byte0;
 
   steeringPosition = (double)combined / 12800.0d;
@@ -296,6 +301,48 @@ void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
 // from 0x1D0
 void setEngineTemp(unsigned char byte0) {
   engineTemp = (signed short)byte0 - 48;
+}
+
+// from 0x1D6
+void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
+  // the steering wheel has 8 buttons --> to be space efficient store them in one unsigned char
+  unsigned char tempButtons = 0;
+
+  // This code can be optimized by a lot, just temporary for testing
+  // Volume up
+  if((unsigned char)((byte0 >> 3) << 7)) {
+    tempButtons += 1;
+  }
+  // Volume down
+  if((unsigned char)((byte0 >> 2) << 7)) {
+    tempButtons += 2;
+  }
+  // Up
+  if((unsigned char)((byte0 >> 5) << 7)) {
+    tempButtons += 4;
+  }
+  // Down
+  if((unsigned char)((byte0 >> 4) << 7)) {
+    tempButtons += 8;
+  }
+  // Telephone
+  if((unsigned char)(byte0 << 7)) {
+    tempButtons += 16;
+  }
+  // Voice
+  if((unsigned char)(byte1 << 7)) {
+    tempButtons += 32;
+  }
+  // Rotate
+  if((unsigned char)((byte1 >> 4) << 7)) {
+    tempButtons += 64;
+  }
+  // Disk
+  if((unsigned char)((byte1 >> 5) << 7)) {
+    tempButtons += 128;
+  }
+
+  steeringWheelButtons = tempButtons;
 }
 
 // from 0x3B4
