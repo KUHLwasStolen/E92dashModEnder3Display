@@ -9,7 +9,7 @@ Modifying the electrical system of your car can be **dangerous** and may void yo
 Dangerous not only for your car, but also for your health!  
 Before attempting any of the described modifications in this repository, **fully** read and **fully** understand everything in this README.  
 I do **not** take responsibility for any type of damages, that may occur as a result of the modifications shown here.  
-Do this on your own risk.
+Do this at your own risk.
 
 ## Plan
 The plan is to tap into the CAN-bus somewhere on the vehicle to gather interesting information.  
@@ -62,7 +62,7 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 
 | Description | Quantity | Notes | Link |
 |---|---|---|---|
-| ESP32-WROOM-32 dev module | 1 | most other ESPs should also work, just connect everything to the right GPIOs | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
+| ESP32-WROOM-32 dev module | 2 | most other ESPs should also work, just connect everything to the right GPIOs, will probably be replaced for a more compact solution | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
 | MCP2515 CAN bus module | 1 | yes, odd choice in combination with ESP32, I just use what I already had | https://www.az-delivery.de/en/products/mcp2515-can-bus-modul?_pos=1&_psq=MCP2515&_ss=e&_v=1.0 |
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
 | 10k Ohm resistor | 1 | used as a pullup, similar values may also work |  |

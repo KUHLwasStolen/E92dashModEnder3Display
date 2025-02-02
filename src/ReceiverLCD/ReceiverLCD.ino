@@ -1,36 +1,42 @@
+#include <esp_now.h>
+#include <WiFi.h>
 #include <SPI.h>
 #include <U8g2lib.h>
-#include <mcp2515_can.h>
-
-#define _USE_MATH_DEFINES
-#include <math.h>
 
 #define LCD_POWER_PIN 27
 #define ENC_PIN 26
 #define LCD_CS_PIN 14
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
-#define CAN_CS_PIN 5
+
+#define ESP_NOW_CHANNEL 7
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 unsigned char lcdState = 1; // 0 = off, 1 = page 1
 #define LCDSTATE_COUNT 2 // number of available states of the lcd
 
-bool clutchPressed = true;
-bool brakePressed = false;
-unsigned char steeringWheelButtons = 0; // each bit one button: 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-short engineTemp = 91;
-unsigned short engineRpm = 3945;
-double engineTorque = 319.1948347;
-double batteryVoltage = 12.41123;
-double throttlePercentage = 0.6789; // throttle from 0 (foot off paddle) to 1 (flat)
-double steeringPosition = 0.4567; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
-
-mcp2515_can CAN(CAN_CS_PIN);
-
-TaskHandle_t DataTask;
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
+
+typedef struct kcan_data {
+  bool clutchPressed;
+  bool brakePressed;
+  unsigned char steeringWheelButtons; // each bit one button: 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  short engineTemp;
+  unsigned short engineRpm;
+  double engineTorque; // can be negative!
+  double batteryVoltage;
+  double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
+  double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+} kcan_data;
+
+// initialize with default values
+kcan_data data = {false, false, 0, 0, 0, 0.0, 0.0, 0.0, 0.0};
+
+// executed when data is received
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&data, incomingData, sizeof(data));
+}
 
 void setup() {
   Serial.begin(115200);
@@ -42,37 +48,37 @@ void setup() {
   u8g2.begin(); // initialize lcd
   u8g2.setFont(u8g2_font_6x10_mr);
 
-  showStartupLogo(2500);
-
-  /* ATTENTION: We are interfacing a 100KBPS CAN bus but need to use the 200KBPS variable
-     This is needed because the library expects a MCP module with a 16MHz crystal on it
-     Check if your crystal (usually shiny, oval) has an 8 or 16 written on it
-     if 8 --> use CAN_200KBPS          if 16 --> use CAN_100KBPS
-     This also applies to other CAN bus speeds of course, always double the speed if you have an 8MHz crystal */
-  while (CAN_OK != CAN.begin(CAN_200KBPS)) {
-    Serial.println("CAN bus init failed! Retrying in 250...");
-    displayErrorMessage("CAN init failed!");
-    delay(250);
+  // Setup WIFI mode and print MAC address
+  WiFi.mode(WIFI_MODE_STA);
+  WiFi.setChannel(ESP_NOW_CHANNEL);
+  while (!WiFi.STA.started()) {
+    delay(100);
   }
-  Serial.println("CAN bus initialized successfully");
+  Serial.print("Receiving data at: ");
+  Serial.println(WiFi.macAddress());
 
-  xTaskCreatePinnedToCore(
-                    dataTaskCode,   // Task function.
-                    "dataTask",     // name of task.
-                    10000,          // Stack size of task
-                    NULL,           // parameter of the task
-                    1,              // priority of the task
-                    &DataTask,      // Task handle to keep track of created task
-                    1);             // pin task to core 1
+  // Init ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW! Restarting in 250");
+    displayErrorMessage("ESP-NOW init failed!");
+    delay(250);
+    ESP.restart();
+  }
+
+  // register callback function
+  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+  Serial.println("Succesfully initialized ESP-NOW");
+
+  showStartupLogo(2500);
 
   xTaskCreatePinnedToCore(
                     renderingTaskCode,    // Task function
                     "renderingTask",      // name of task
-                    10000,                // Stack size of task
+                    10000,                 // Stack size of task
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &RenderingTask,       // Task handle to keep track of created task
-                    0);                   // pin task to core 0
+                    1);                   // pin task to core 0
 
   xTaskCreatePinnedToCore(
                     userInputTaskCode,    // Task function
@@ -81,58 +87,11 @@ void setup() {
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &UserInputTask,       // Task handle to keep track of created task
-                    0);                   // pin task to core 0
-
+                    1);                   // pin task to core 0
 }
 
-
+ 
 void loop() {
-}
-
-
-void dataTaskCode(void * params) {
-  Serial.print("Data task running on core ");
-  Serial.println(xPortGetCoreID());
-
-  unsigned char len = 0;
-  unsigned char buf[8];
-
-  while(1) {
-    if (CAN_MSGAVAIL == CAN.checkReceive()) { // Message received
-      CAN.readMsgBuf(&len, buf);
-      unsigned long canId = CAN.getCanId();
-
-      // If interesting ID received, set corresponding values
-      switch(canId) {
-        case 0xA8:
-          setEngineTorque(buf[1], buf[2]);
-          setClutchPressed(buf[5]);
-          setBrakePressed(buf[7]);
-          break;
-
-        case 0xAA:
-          setThrottlePercentage(buf[2], buf[3]);
-          setEngineRpm(buf[4], buf[5]);
-          break;
-
-        case 0xC8:
-          setSteeringPosition(buf[0], buf[1]);
-          break;
-
-        case 0x1D0:
-          setEngineTemp(buf[0]);
-          break;
-
-        case 0x1D6:
-          setSteeringWheelButtons(buf[0], buf[1]);
-          break;
-
-        case 0x3B4:
-          setBatteryVoltage(buf[0], buf[1]);
-          break;
-      }
-    }
-  }
 }
 
 
@@ -185,7 +144,7 @@ void updateDisplay() {
 
     // displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition 
     case 1:
-      char outputStr[11];
+      char outputStr[12];
       u8g2.firstPage();
       do {
         u8g2.drawStr(1, 8, "Enginetemp.:");
@@ -206,16 +165,16 @@ void updateDisplay() {
         u8g2.drawStr(81, 38, outputStr);
 
         // Clutch status
-        u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
+        u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
 
         // Brake status
-        u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
+        u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
 
         // Throttle position
-        u8g2.drawBox(0, 55, round(throttlePercentage * 128.0d), 5);
+        u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0d), 5);
 
         // Steering position
-        int barWidth = round(steeringPosition * 64.0d);
+        int barWidth = round(data.steeringPosition * 64.0d);
         if(barWidth >= 0) {
           u8g2.drawBox(64, 61, barWidth, 3);
         } else {
@@ -230,125 +189,20 @@ void updateDisplay() {
 
 // ### Rendering helper methods ###
 void getEngineTempStr(char* tempStr) {
-  sprintf(tempStr, "%+d C", engineTemp);
+  sprintf(tempStr, "%+d C", data.engineTemp);
 }
 
 void getEnginePowerStr(char* powStr) {
-  double enginePower = ((double)engineRpm * engineTorque * ((2.0d * PI) / 60.0d)) / 1000.0d;
+  double enginePower = ((double)data.engineRpm * data.engineTorque * ((2.0d * PI) / 60.0d)) / 1000.0d;
   sprintf(powStr, "%d kW", (int)round(enginePower));
 }
 
 void getEngineTorqueStr(char* torqueStr) {
-  sprintf(torqueStr, "%d Nm", (int)round(engineTorque));
+  sprintf(torqueStr, "%d Nm", (int)round(data.engineTorque));
 }
 
 void getBatteryVoltageStr(char* voltStr) {
-  sprintf(voltStr, "%.2lf V", batteryVoltage);
-}
-
-
-// ### CAN conversion methods ordered by ID ###
-// from 0x0A8
-void setEngineTorque(unsigned char byte1, unsigned char byte2) {
-  // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
-
-  signed short combined = ((unsigned short)byte2 << 8) + (unsigned short)byte1;
-  engineTorque = (double)combined / 32.0d;
-}
-
-// from 0x0A8
-void setClutchPressed(unsigned char byte5) {
-  unsigned char shifted = byte5 << 7; // only interested in first bit, shift rest out
-
-  if(shifted) {
-    clutchPressed = true;
-  } else {
-    clutchPressed = false;
-  }
-}
-
-// from 0x0A8
-void setBrakePressed(unsigned char byte7) {
-  if(byte7 > 20) {
-    brakePressed = true;
-  } else {
-    brakePressed = false;
-  }
-}
-
-// from 0x0AA
-void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
-  // value between 255 and 65064 (don't ask me why)
-  unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
-
-  throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
-}
-
-// from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5) {
-  engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
-}
-
-// from 0x0C8
-void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
-  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23 and the max steering angle is 600°
-  // negative means to the left and positive to the right --> value between -12800 and +12800 (-600° and 600°)
-  signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
-
-  steeringPosition = (double)combined / 12800.0d;
-}
-
-// from 0x1D0
-void setEngineTemp(unsigned char byte0) {
-  engineTemp = (signed short)byte0 - 48;
-}
-
-// from 0x1D6
-void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
-  // the steering wheel has 8 buttons --> to be space efficient store them in one unsigned char
-  unsigned char tempButtons = 0;
-
-  // This code can be optimized by a lot, just temporary for testing
-  // Volume up
-  if((unsigned char)((byte0 >> 3) << 7)) {
-    tempButtons += 1;
-  }
-  // Volume down
-  if((unsigned char)((byte0 >> 2) << 7)) {
-    tempButtons += 2;
-  }
-  // Up
-  if((unsigned char)((byte0 >> 5) << 7)) {
-    tempButtons += 4;
-  }
-  // Down
-  if((unsigned char)((byte0 >> 4) << 7)) {
-    tempButtons += 8;
-  }
-  // Telephone
-  if((unsigned char)(byte0 << 7)) {
-    tempButtons += 16;
-  }
-  // Voice
-  if((unsigned char)(byte1 << 7)) {
-    tempButtons += 32;
-  }
-  // Rotate
-  if((unsigned char)((byte1 >> 4) << 7)) {
-    tempButtons += 64;
-  }
-  // Disk
-  if((unsigned char)((byte1 >> 5) << 7)) {
-    tempButtons += 128;
-  }
-
-  steeringWheelButtons = tempButtons;
-}
-
-// from 0x3B4
-void setBatteryVoltage(unsigned char byte0, unsigned char byte1) {
-  // (((Byte[1]-240 )*256)+Byte[0])/68 
-  batteryVoltage = (double)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0d;
+  sprintf(voltStr, "%.2lf V", data.batteryVoltage);
 }
 
 
