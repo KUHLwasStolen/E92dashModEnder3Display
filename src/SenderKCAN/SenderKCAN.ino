@@ -5,25 +5,27 @@
 
 #define CAN_CS_PIN 5
 
-#define ESP_NOW_CHANNEL 7
+#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the receiver code!
 
-// Replace with the MAC address of your receiver! (see serial output of the receiver) 58:BF:25:9D:F5:70
+// Replace with the MAC address of your receiver! (see serial output of the receiver)
 uint8_t LCDreceiverAddress[] = {0x58, 0xBF, 0x25, 0x9D, 0xF5, 0x70};
 
 typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
-  unsigned char steeringWheelButtons; // each bit one button: 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  short engineTemp;
+  unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  short engineTemp; // in celcius
   unsigned short engineRpm;
-  double engineTorque; // can be negative!
-  double batteryVoltage;
+  float fuelLevel1; // in liter
+  float fuelLevel2; // in liter
+  float engineTorque; // in Nm, can be negative!
+  float batteryVoltage; // in volts
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
-// initialize data differently from receiver to "dry test"
-kcan_data data = {true, false, 1, 1, 1, 1.0, 1.0, 0.75, -0.5};
+// initialize data differently from receiver to "dry test" without connection to car
+kcan_data data = {true, false, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 0.75d, -0.5d};
 esp_now_peer_info_t receiverInfo;
 
 mcp2515_can CAN(CAN_CS_PIN);
@@ -41,6 +43,7 @@ void OnDataSent(const uint8_t * mac_addr, esp_now_send_status_t status) {
 
 void setup() {
   Serial.begin(115200);
+
   WiFi.mode(WIFI_STA);
   WiFi.setChannel(ESP_NOW_CHANNEL);
   while (!WiFi.STA.started()) {
@@ -52,6 +55,7 @@ void setup() {
     Serial.println("Error initializing ESP-NOW! Restarting...");
     ESP.restart();
   }
+
   // Register callback message
   esp_now_register_send_cb(OnDataSent);
   
@@ -139,6 +143,10 @@ void dataTaskCode(void * params) {
           setSteeringWheelButtons(buf[0], buf[1]);
           break;
 
+        case 0x349:
+          setFuelLevels(buf[0], buf[1], buf[2], buf[3]);
+          break;
+
         case 0x3B4:
           setBatteryVoltage(buf[0], buf[1]);
           break;
@@ -152,9 +160,11 @@ void senderTaskCode(void * params) {
   Serial.print("Sender task running on core ");
   Serial.println(xPortGetCoreID());
 
+  esp_err_t sendErr;
+
   while(1) {
-    esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(100);
+    sendErr = esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
+    delay(sendErr == ESP_OK ? 100 : 750); // longer delay between unsuccessful sends to avoid many sends when receiver isn't ready yet
   }
 }
 
@@ -163,29 +173,19 @@ void senderTaskCode(void * params) {
 // from 0x0A8
 void setEngineTorque(unsigned char byte1, unsigned char byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
-
   signed short combined = ((unsigned short)byte2 << 8) + (unsigned short)byte1;
-  data.engineTorque = (double)combined / 32.0d;
+  data.engineTorque = (float)combined / 32.0f;
 }
 
 // from 0x0A8
 void setClutchPressed(unsigned char byte5) {
-  unsigned char shifted = byte5 << 7; // only interested in first bit, shift rest out
-
-  if(shifted) {
-    data.clutchPressed = true;
-  } else {
-    data.clutchPressed = false;
-  }
+  // to check first bit we only need to check if the number is odd or even
+  data.clutchPressed = byte5 % 2;
 }
 
 // from 0x0A8
 void setBrakePressed(unsigned char byte7) {
-  if(byte7 > 20) {
-    data.brakePressed = true;
-  } else {
-    data.brakePressed = false;
-  }
+  data.brakePressed = byte7 > 20;
 }
 
 // from 0x0AA
@@ -220,45 +220,50 @@ void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
   // the steering wheel has 8 buttons --> to be space efficient store them in one unsigned char
   unsigned char tempButtons = 0;
 
-  // This code can be optimized by a lot, just temporary for testing
-  // Volume up
-  if((unsigned char)((byte0 >> 3) << 7)) {
+  // Volume up at bit 4
+  if((byte0 >> 3) % 2) {
     tempButtons += 1;
   }
-  // Volume down
-  if((unsigned char)((byte0 >> 2) << 7)) {
+  // Volume down at bit 3
+  if((byte0 >> 2) % 2) {
     tempButtons += 2;
   }
-  // Up
-  if((unsigned char)((byte0 >> 5) << 7)) {
+  // Up at bit 6
+  if((byte0 >> 5) % 2) {
     tempButtons += 4;
   }
-  // Down
-  if((unsigned char)((byte0 >> 4) << 7)) {
+  // Down at bit 5
+  if((byte0 >> 4) % 2) {
     tempButtons += 8;
   }
-  // Telephone
-  if((unsigned char)(byte0 << 7)) {
+  // Telephone at bit 1
+  if(byte0 % 2) {
     tempButtons += 16;
   }
-  // Voice
-  if((unsigned char)(byte1 << 7)) {
+  // Voice at bit 1
+  if(byte1 % 2) {
     tempButtons += 32;
   }
-  // Rotate
-  if((unsigned char)((byte1 >> 4) << 7)) {
+  // Rotate at bit 5
+  if((byte1 >> 4) % 2) {
     tempButtons += 64;
   }
-  // Disk
-  if((unsigned char)((byte1 >> 5) << 7)) {
+  // Disk at bit 6
+  if((byte1 >> 5) % 2) {
     tempButtons += 128;
   }
 
   data.steeringWheelButtons = tempButtons;
 }
 
+// from 0x349
+void setFuelLevels(unsigned char byte0, unsigned char byte1, unsigned char byte2, unsigned char byte3) {
+  data.fuelLevel1 = (float)(((unsigned short)byte1 << 8) + (unsigned short)byte0) / 160.0f;
+  data.fuelLevel2 = (float)(((unsigned short)byte3 << 8) + (unsigned short)byte2) / 160.0f;
+}
+
 // from 0x3B4
 void setBatteryVoltage(unsigned char byte0, unsigned char byte1) {
   // (((Byte[1]-240 )*256)+Byte[0])/68 
-  data.batteryVoltage = (double)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0d;
+  data.batteryVoltage = (float)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0f;
 }

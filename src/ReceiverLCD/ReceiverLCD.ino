@@ -9,11 +9,11 @@
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
 
-#define ESP_NOW_CHANNEL 7
+#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = page 1
-#define LCDSTATE_COUNT 2 // number of available states of the lcd
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo
+#define LCDSTATE_COUNT 3 // number of available states of the lcd
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -21,25 +21,29 @@ TaskHandle_t UserInputTask;
 typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
-  unsigned char steeringWheelButtons; // each bit one button: 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  short engineTemp;
+  unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  short engineTemp; // in celcius
   unsigned short engineRpm;
-  double engineTorque; // can be negative!
-  double batteryVoltage;
+  float fuelLevel1; // in liter
+  float fuelLevel2; // in liter
+  float engineTorque; // in Nm, can be negative!
+  float batteryVoltage; // in volts
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 // initialize with default values
-kcan_data data = {false, false, 0, 0, 0, 0.0, 0.0, 0.0, 0.0};
+kcan_data data = {false, false, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
 
 // executed when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int len) {
   memcpy(&data, incomingData, sizeof(data));
 }
 
+
 void setup() {
   Serial.begin(115200);
+
   pinMode(LCD_POWER_PIN, OUTPUT);
   pinMode(ENC_PIN, INPUT);
 
@@ -74,11 +78,11 @@ void setup() {
   xTaskCreatePinnedToCore(
                     renderingTaskCode,    // Task function
                     "renderingTask",      // name of task
-                    10000,                 // Stack size of task
+                    10000,                // Stack size of task
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &RenderingTask,       // Task handle to keep track of created task
-                    1);                   // pin task to core 0
+                    1);                   // pin task to core 1
 
   xTaskCreatePinnedToCore(
                     userInputTaskCode,    // Task function
@@ -87,7 +91,7 @@ void setup() {
                     NULL,                 // parameter of the task
                     1,                    // priority of the task
                     &UserInputTask,       // Task handle to keep track of created task
-                    1);                   // pin task to core 0
+                    1);                   // pin task to core 1
 }
 
  
@@ -99,8 +103,12 @@ void userInputTaskCode(void * params) {
   Serial.print("User input task running on core ");
   Serial.println(xPortGetCoreID());
 
+  bool pressed = false;
+
   while(1) {
+    // Encoder button
     if(digitalRead(ENC_PIN) == 0) {
+      pressed = true;
       Serial.println("Encoder button pressed");
       
       if(lcdState == 0) {
@@ -116,11 +124,51 @@ void userInputTaskCode(void * params) {
         Serial.println("Turning off LCD");
         digitalWrite(LCD_POWER_PIN, LOW);
       }
-
-      delay(450); // avoid multiple triggers on one press
     }
 
-    delay(1); // to avoid triggering the watchdog timeout
+
+    if(volumeUpPressed()) {
+      pressed = true;
+      Serial.println("Volume up (steering wheel) pressed");
+    }
+
+    if(volumeDownPressed()) {
+      pressed = true;
+      Serial.println("Volume down (steering wheel) pressed");
+    }
+
+    if(upPressed()) {
+      pressed = true;
+      Serial.println("Up button (steering wheel) pressed");
+    }
+
+    if(downPressed()) {
+      pressed = true;
+      Serial.println("Down button (steering wheel) pressed");
+    }
+
+    if(telephonePressed()) {
+      pressed = true;
+      Serial.println("Telephone button (steering wheel) pressed");
+    }
+
+    if(voicePressed()) {
+      pressed = true;
+      Serial.println("Voice button (steering wheel) pressed");
+    }
+
+    if(rotatePressed()) {
+      pressed = true;
+      Serial.println("Rotate button (steering wheel) pressed");
+    }
+
+    if(diskPressed()) {
+      pressed = true;
+      Serial.println("Disk button (steering wheel) pressed");
+    }
+
+    delay(pressed ? 450 : 1); // if pressed avoid multiple triggers, if not avoid triggering watchdog timeout
+    pressed = false;
   }
 }
 
@@ -144,44 +192,12 @@ void updateDisplay() {
 
     // displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition 
     case 1:
-      char outputStr[12];
-      u8g2.firstPage();
-      do {
-        u8g2.drawStr(1, 8, "Enginetemp.:");
-        getEngineTempStr(outputStr);
-        u8g2.drawUTF8(81, 8, outputStr);
-
-        // Calculated engine power from torque and rpm
-        u8g2.drawStr(1, 18, "Enginepower:");
-        getEnginePowerStr(outputStr);
-        u8g2.drawStr(81, 18, outputStr);
-
-        u8g2.drawStr(1, 28, "Torque     :");
-        getEngineTorqueStr(outputStr);
-        u8g2.drawStr(81, 28, outputStr);
-
-        u8g2.drawStr(1, 38, "Battvoltage:");
-        getBatteryVoltageStr(outputStr);
-        u8g2.drawStr(81, 38, outputStr);
-
-        // Clutch status
-        u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
-
-        // Brake status
-        u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
-
-        // Throttle position
-        u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0d), 5);
-
-        // Steering position
-        int barWidth = round(data.steeringPosition * 64.0d);
-        if(barWidth >= 0) {
-          u8g2.drawBox(64, 61, barWidth, 3);
-        } else {
-          u8g2.drawBox(64 + barWidth, 61, abs(barWidth), 3);
-        }
-        
-      } while ( u8g2.nextPage() );
+      drawMixedDash();
+    break;
+    
+    // displays fuel levels
+    case 2:
+      drawFuelInfo();
     break;
   }
 }
@@ -193,7 +209,7 @@ void getEngineTempStr(char* tempStr) {
 }
 
 void getEnginePowerStr(char* powStr) {
-  double enginePower = ((double)data.engineRpm * data.engineTorque * ((2.0d * PI) / 60.0d)) / 1000.0d;
+  float enginePower = ((float)data.engineRpm * data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
   sprintf(powStr, "%d kW", (int)round(enginePower));
 }
 
@@ -202,11 +218,137 @@ void getEngineTorqueStr(char* torqueStr) {
 }
 
 void getBatteryVoltageStr(char* voltStr) {
-  sprintf(voltStr, "%.2lf V", data.batteryVoltage);
+  sprintf(voltStr, "%.2f V", data.batteryVoltage);
+}
+
+void getFuelLevelStr(char* fuelStr, int fuelIndex) {
+  switch(fuelIndex) {
+    case 1:
+      sprintf(fuelStr, "%.1f l", data.fuelLevel1);
+    break;
+
+    case 2:
+      sprintf(fuelStr, "%3.1f l", data.fuelLevel2);
+    break;
+
+    default: sprintf(fuelStr, "N/A");
+  }
+}
+
+void getFuelPercentageStr(char* fuelStr) {
+  sprintf(fuelStr, "%4.1f%%", ((data.fuelLevel1 + data.fuelLevel2) * 100.0f) / (2.0f * 62.0f));
+}
+
+
+// ### Logic helper methods ###
+//  ## Convert steeringWheelButtons into bools
+bool volumeUpPressed() {
+  return data.steeringWheelButtons % 2;
+}
+
+bool volumeDownPressed() {
+  return (data.steeringWheelButtons >> 1) % 2;
+}
+
+bool upPressed() {
+  return (data.steeringWheelButtons >> 2) % 2;
+}
+
+bool downPressed() {
+  return (data.steeringWheelButtons >> 3) % 2;
+}
+
+bool telephonePressed() {
+  return (data.steeringWheelButtons >> 4) % 2;
+}
+
+bool voicePressed() {
+  return (data.steeringWheelButtons >> 5) % 2;
+}
+
+bool rotatePressed() {
+  return (data.steeringWheelButtons >> 6) % 2;
+}
+
+bool diskPressed() {
+  return (data.steeringWheelButtons >> 7) % 2;
 }
 
 
 // ### General visual helper methods
+// displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition
+void drawMixedDash() {
+  char outputStr[12];
+
+  u8g2.firstPage();
+  do {
+    u8g2.drawStr(1, 8, "Enginetemp.:");
+    getEngineTempStr(outputStr);
+    u8g2.drawUTF8(81, 8, outputStr);
+
+    // Calculated engine power from torque and rpm
+    u8g2.drawStr(1, 18, "Enginepower:");
+    getEnginePowerStr(outputStr);
+    u8g2.drawStr(81, 18, outputStr);
+
+    u8g2.drawStr(1, 28, "Torque     :");
+    getEngineTorqueStr(outputStr);
+    u8g2.drawStr(81, 28, outputStr);
+
+    u8g2.drawStr(1, 38, "Battvoltage:");
+    getBatteryVoltageStr(outputStr);
+    u8g2.drawStr(81, 38, outputStr);
+
+    // Clutch status
+    u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
+
+    // Brake status
+    u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
+
+    // Throttle position
+    u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0d), 5);
+
+    // Steering position
+    int barWidth = round(data.steeringPosition * 64.0d);
+    if(barWidth >= 0) {
+      u8g2.drawBox(64, 61, barWidth, 3);
+    } else {
+      u8g2.drawBox(64 + barWidth, 61, abs(barWidth), 3);
+    }
+    
+  } while( u8g2.nextPage() );
+}
+
+// displays fuel levels
+void drawFuelInfo() {
+  // max fuel is about 62 liters which we will map to a height of 31 pixels (about half of the display)
+  int level1Height = 63 - (int)round(data.fuelLevel1 * (31.0f/62.0f));
+  int level2Height = 63 - (int)round(data.fuelLevel2 * (31.0f/62.0f));
+  int textHeight = level1Height > level2Height ? level1Height - 3 : level2Height - 3;
+  char outputStr[8];
+
+  u8g2.firstPage();
+  do {
+    u8g2.drawStr(1, 8, "Range:");
+    
+    u8g2.drawStr(1.18, " Avg.:");
+
+    getFuelLevelStr(outputStr, 1);
+    u8g2.drawStr(1, textHeight, outputStr);
+
+    getFuelPercentageStr(outputStr);
+    u8g2.drawStr(46, textHeight, outputStr);
+
+    getFuelLevelStr(outputStr, 2);
+    u8g2.drawStr(93, textHeight, outputStr);
+
+    // fuel level 1
+    u8g2.drawTriangle(0,level1Height, 0,63, 127,63);
+    // fuel level 2
+    u8g2.drawTriangle(0,level1Height, 127,level2Height, 127,63);
+  } while( u8g2.nextPage() );
+}
+
 // displays a simple one line string on the lcd
 void displayErrorMessage(char * message) {
   u8g2.firstPage();
