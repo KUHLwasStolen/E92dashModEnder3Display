@@ -25,8 +25,9 @@ typedef struct kcan_data {
 } kcan_data;
 
 // initialize data differently from receiver to "dry test" without connection to car
-kcan_data data = {true, false, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 0.75d, -0.5d};
+kcan_data data = {true, false, 0, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 0.75d, -0.5d};
 esp_now_peer_info_t receiverInfo;
+esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
 mcp2515_can CAN(CAN_CS_PIN);
 
@@ -35,6 +36,7 @@ TaskHandle_t SenderTask;
 
 // called when a data package is sent
 void OnDataSent(const uint8_t * mac_addr, esp_now_send_status_t status) {
+  lastSendStatus = status;
   if(status != 0) {
     Serial.println("Error sending message!");
   }
@@ -163,8 +165,8 @@ void senderTaskCode(void * params) {
   esp_err_t sendErr;
 
   while(1) {
-    sendErr = esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(sendErr == ESP_OK ? 100 : 750); // longer delay between unsuccessful sends to avoid many sends when receiver isn't ready yet
+    esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
+    delay(lastSendStatus != 0 ? 750 : 100); // longer delay between unsuccessful sends to avoid many sends when receiver isn't ready yet
   }
 }
 

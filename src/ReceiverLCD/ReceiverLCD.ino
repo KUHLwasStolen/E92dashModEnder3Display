@@ -324,28 +324,28 @@ void drawFuelInfo() {
   // max fuel is about 62 liters which we will map to a height of 31 pixels (about half of the display)
   int level1Height = 63 - (int)round(data.fuelLevel1 * (31.0f/62.0f));
   int level2Height = 63 - (int)round(data.fuelLevel2 * (31.0f/62.0f));
-  int textHeight = level1Height > level2Height ? level1Height - 3 : level2Height - 3;
+  int textHeight = level1Height < level2Height ? level1Height - 1 : level2Height - 1;
   char outputStr[8];
 
   u8g2.firstPage();
   do {
     u8g2.drawStr(1, 8, "Range:");
     
-    u8g2.drawStr(1.18, " Avg.:");
+    u8g2.drawStr(1, 18, " Avg.:");
 
     getFuelLevelStr(outputStr, 1);
     u8g2.drawStr(1, textHeight, outputStr);
 
     getFuelPercentageStr(outputStr);
-    u8g2.drawStr(46, textHeight, outputStr);
+    u8g2.drawStr(48, textHeight, outputStr);
 
     getFuelLevelStr(outputStr, 2);
     u8g2.drawStr(93, textHeight, outputStr);
 
     // fuel level 1
-    u8g2.drawTriangle(0,level1Height, 0,63, 127,63);
+    u8g2.drawTriangle(0,level1Height, 0,64, 128,64);
     // fuel level 2
-    u8g2.drawTriangle(0,level1Height, 127,level2Height, 127,63);
+    u8g2.drawTriangle(0,level1Height, 128,level2Height, 128,64);
   } while( u8g2.nextPage() );
 }
 
