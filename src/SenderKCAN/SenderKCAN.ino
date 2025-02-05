@@ -82,6 +82,11 @@ void setup() {
     Serial.println("CAN bus init failed! Retrying in 250...");
     delay(250);
   }
+  do {
+    Serial.println("Setting CAN mode to MODE_LISTENONLY");
+    //  if we don't set this mode i assume that the MCP sends an acknowledge message when messages are received and the car does NOT like this AT ALL
+    CAN.setMode(MODE_LISTENONLY); // this is very important!!!
+  } while(CAN.getMode() != MODE_LISTENONLY);
   Serial.println("CAN bus initialized successfully");
 
   xTaskCreatePinnedToCore(
@@ -166,7 +171,7 @@ void senderTaskCode(void * params) {
 
   while(1) {
     esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(lastSendStatus != 0 ? 750 : 100); // longer delay between unsuccessful sends to avoid many sends when receiver isn't ready yet
+    delay(lastSendStatus != 0 ? 1000 : 100); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
   }
 }
 

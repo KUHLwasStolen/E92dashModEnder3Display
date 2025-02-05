@@ -31,21 +31,29 @@ This solution avoids having to run long wires through the car or having to tap i
 Another advantage is that this allows us to expand the network of devices in the car pretty easily.  
 I still have to test if this approach is viable, regarding delay, reliability and so on, but from my research it seems promising...
 
-### Relevant information from KCAN
+#### Relevant information from KCAN
 | CAN-ID | Description | Successful? |
 |---|---|---|
 | 0x0A8 | Engine torque to compute power, brake and clutch status | Yes |
 | 0x0AA | Throttle position, engine RPM | Yes |
 | 0x0C8 | Steering wheel angle/position | Yes |
 | 0x1D0 | Engine temperature | Yes |
-| 0x1D6 | Steering wheel buttons as not all of them do something in my car | To be tested |
+| 0x1D6 | Steering wheel buttons, as not all of them do something in my car | Yes, except for disk button (not a top priority though) |
+| 0x349 | Fuel sensor levels (car has two) | Yes |
 | 0x3B4 | Battery voltage | Yes |
 
 ## Execution of the plan
 Tapping into the KCAN in the trunk of the car was successful.  
 I have received all of the expected IDs and the data seems to be accurate/converted properly, which I still have to verify in more detail.  
 **Tip:** If you are attempting the same procedure as me, remove the trim panels in the battery area, not only the battery cover.  
-I did not and it was *very* tedious due to the space constraints (2 hours for splicing 2 wires).
+I did not and it was *very* tedious due to the space constraints (2 hours for splicing 2 wires).  
+
+At the moment I get the power for the ESP32 with the MCP from the 12V connector in the trunk.  
+This connector is on when the ignition is on.  
+
+**Attention:** When I first tried to access the KCAN the car was throwing **all** sorts of error messages at me.  
+I assume that the cause for this was, that the ESP was sending acknowledgement messages to the car when a message was received.  
+Seemingly the car does not like this **at all**. Setting the MCP mode to listen-only seems to fix this though.
 
 ## Schematic
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
@@ -62,7 +70,7 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 
 | Description | Quantity | Notes | Link |
 |---|---|---|---|
-| ESP32-WROOM-32 dev module | 2 | most other ESPs should also work, just connect everything to the right GPIOs, will probably be replaced for a more compact solution | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
+| ESP32-WROOM-32 dev module | 2 | most other ESPs should also work, just connect everything to the right GPIOs | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
 | MCP2515 CAN bus module | 1 | yes, odd choice in combination with ESP32, I just use what I already had | https://www.az-delivery.de/en/products/mcp2515-can-bus-modul?_pos=1&_psq=MCP2515&_ss=e&_v=1.0 |
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
 | 10k Ohm resistor | 1 | used as a pullup, similar values may also work |  |
@@ -70,6 +78,7 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
 | Jumper wires | 1 metric ton | will be replaced in the future by a less prototypie solution | |
+| Perf board + accessories |  | My plan for the final implementation in the car | https://www.amazon.com/Smraza-Soldering-Electronic-Compatible-Prototype/dp/B07NM68FXK/ref=sr_1_3 (I bought something similar) | 
 
 ## References
 Here you can find some links with useful information in relation to this project.  
