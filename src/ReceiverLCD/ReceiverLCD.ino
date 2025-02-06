@@ -24,16 +24,18 @@ typedef struct kcan_data {
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
   short engineTemp; // in celcius
   unsigned short engineRpm;
+  unsigned short range; // in km
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
+  float avgConsumption; // units unclear atm
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 // initialize with default values
-kcan_data data = {false, false, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
+kcan_data data = {false, false, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
 
 // executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int len) {
@@ -239,6 +241,14 @@ void getFuelPercentageStr(char* fuelStr) {
   sprintf(fuelStr, "%4.1f%%", ((data.fuelLevel1 + data.fuelLevel2) * 100.0f) / (2.0f * 62.0f));
 }
 
+void getRangeStr(char* rangeStr) {
+  sprintf(rangeStr, "%d km", data.range);
+}
+
+void getAvgConsumptionStr(char* consStr) {
+  sprintf(consStr, "%.1f l/100km ?");
+}
+
 
 // ### Logic helper methods ###
 //  ## Convert steeringWheelButtons into bools
@@ -325,13 +335,17 @@ void drawFuelInfo() {
   int level1Height = 63 - (int)round(data.fuelLevel1 * (31.0f/62.0f));
   int level2Height = 63 - (int)round(data.fuelLevel2 * (31.0f/62.0f));
   int textHeight = level1Height < level2Height ? level1Height - 1 : level2Height - 1;
-  char outputStr[8];
+  char outputStr[15];
 
   u8g2.firstPage();
   do {
     u8g2.drawStr(1, 8, "Range:");
+    getRangeStr(outputStr);
+    u8g2.drawStr(43, 8, outputStr);
     
     u8g2.drawStr(1, 18, " Avg.:");
+    getAvgConsumptionStr(outputStr);
+    u8g2.drawStr(43, 18, outputStr);
 
     getFuelLevelStr(outputStr, 1);
     u8g2.drawStr(1, textHeight, outputStr);

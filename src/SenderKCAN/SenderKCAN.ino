@@ -16,16 +16,18 @@ typedef struct kcan_data {
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
   short engineTemp; // in celcius
   unsigned short engineRpm;
+  unsigned short range; // in km
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
+  float avgConsumption; // units unclear atm
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 // initialize data differently from receiver to "dry test" without connection to car
-kcan_data data = {true, false, 0, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 0.75d, -0.5d};
+kcan_data data = {true, false, 0, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 1.0f, 0.75d, -0.5d};
 esp_now_peer_info_t receiverInfo;
 esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
@@ -150,6 +152,10 @@ void dataTaskCode(void * params) {
           setSteeringWheelButtons(buf[0], buf[1]);
           break;
 
+        case 0x330:
+          setRange(buf[6], buf[7]);
+          break;
+
         case 0x349:
           setFuelLevels(buf[0], buf[1], buf[2], buf[3]);
           break;
@@ -263,10 +269,20 @@ void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
   data.steeringWheelButtons = tempButtons;
 }
 
+// from 0x330
+void setRange(unsigned char byte6, unsigned char byte7) {
+  data.range = (((unsigned short)byte7 << 8) + (unsigned short)byte6) / (unsigned short)16;
+}
+
 // from 0x349
 void setFuelLevels(unsigned char byte0, unsigned char byte1, unsigned char byte2, unsigned char byte3) {
   data.fuelLevel1 = (float)(((unsigned short)byte1 << 8) + (unsigned short)byte0) / 160.0f;
   data.fuelLevel2 = (float)(((unsigned short)byte3 << 8) + (unsigned short)byte2) / 160.0f;
+}
+
+// from 0x362
+void setAvgConsumption(unsigned char byte1, unsigned char byte2) {
+  data.avgConsumption = (float)(((unsigned short)byte2 << 8) + ((unsigned short)byte1 >> 4)) / 10.0f;
 }
 
 // from 0x3B4

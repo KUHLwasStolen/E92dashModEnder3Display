@@ -39,7 +39,9 @@ I still have to test if this approach is viable, regarding delay, reliability an
 | 0x0C8 | Steering wheel angle/position | Yes |
 | 0x1D0 | Engine temperature | Yes |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | Yes, except for disk button (not a top priority though) |
-| 0x349 | Fuel sensor levels (car has two) | Yes |
+| 0x330 | Range | To be tested |
+| 0x349 | Fuel level sensors (car has two) | Yes |
+| 0x362 | Average fuel consumption | To be tested |
 | 0x3B4 | Battery voltage | Yes |
 
 ## Execution of the plan
@@ -50,6 +52,11 @@ I did not and it was *very* tedious due to the space constraints (2 hours for sp
 
 At the moment I get the power for the ESP32 with the MCP from the 12V connector in the trunk.  
 This connector is on when the ignition is on.  
+This is a very convenient solution, but not perfect.  
+I am thinking about implementing a logging system (data to SD) and for this it would be optimal if the ESP was still on a bit after the engine is stopped.  
+I know that there are power lines in the BMW that stay on for a while after the car is locked, but I couldn't find much information about this.  
+An alternative would be a small battery backup that keeps the ESP alive for a moment after the car is stopped.  
+I'm not a fan of an actual battery, but capacitors might do the trick(?).  
 
 **Attention:** When I first tried to access the KCAN the car was throwing **all** sorts of error messages at me.  
 I assume that the cause for this was, that the ESP was sending acknowledgement messages to the car when a message was received.  
