@@ -12,8 +12,8 @@
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo
-#define LCDSTATE_COUNT 3 // number of available states of the lcd
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors
+#define LCDSTATE_COUNT 4 // number of available states of the lcd
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -22,6 +22,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   short engineTemp; // in celcius
   unsigned short engineRpm;
   unsigned short range; // in km
@@ -30,12 +31,13 @@ typedef struct kcan_data {
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
   float avgConsumption; // units unclear atm
+  float avgSpeed; // units unclear atm
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 // initialize with default values
-kcan_data data = {false, false, 0, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
+kcan_data data = {false, false, 0, {0}, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
 
 // executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int len) {
@@ -117,6 +119,8 @@ void userInputTaskCode(void * params) {
         // Turn on lcd
         Serial.println("Turning on LCD");
         digitalWrite(LCD_POWER_PIN, HIGH);
+        delay(25); // give it a bit of time to turn on again
+        u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
       }
 
       lcdState = (lcdState + 1) % LCDSTATE_COUNT;
@@ -181,7 +185,7 @@ void renderingTaskCode(void * params) {
 
   while(1) {
     updateDisplay();
-    delay(100);
+    delay(50);
   }
 }
 
@@ -200,6 +204,11 @@ void updateDisplay() {
     // displays fuel levels
     case 2:
       drawFuelInfo();
+    break;
+
+    // displays PDC sensor distances
+    case 3:
+      drawPDCsensors();
     break;
   }
 }
@@ -230,7 +239,7 @@ void getFuelLevelStr(char* fuelStr, int fuelIndex) {
     break;
 
     case 2:
-      sprintf(fuelStr, "%3.1f l", data.fuelLevel2);
+      sprintf(fuelStr, "%4.1f l", data.fuelLevel2);
     break;
 
     default: sprintf(fuelStr, "N/A");
@@ -246,7 +255,15 @@ void getRangeStr(char* rangeStr) {
 }
 
 void getAvgConsumptionStr(char* consStr) {
-  sprintf(consStr, "%.1f l/100km ?");
+  sprintf(consStr, "%.1f l/100km ?", data.avgConsumption);
+}
+
+void getAvgSpeedStr(char* speedStr) {
+  sprintf(speedStr, "%.1f km/h ?", data.avgSpeed);
+}
+
+void getPDCstr(char* pdcStr, unsigned char index, bool left) {
+  sprintf(pdcStr, left ? "%d cm": "%3d cm", data.PDCsensors[index]);
 }
 
 
@@ -331,10 +348,10 @@ void drawMixedDash() {
 
 // displays fuel levels
 void drawFuelInfo() {
-  // max fuel is about 62 liters which we will map to a height of 31 pixels (about half of the display)
-  int level1Height = 63 - (int)round(data.fuelLevel1 * (31.0f/62.0f));
-  int level2Height = 63 - (int)round(data.fuelLevel2 * (31.0f/62.0f));
-  int textHeight = level1Height < level2Height ? level1Height - 1 : level2Height - 1;
+  // max fuel is about 62 liters which we will map to a height of 32 pixels (about half of the display)
+  int level1Height = 63 - (int)round(data.fuelLevel1 * (32.0f/62.0f));
+  int level2Height = 63 - (int)round(data.fuelLevel2 * (32.0f/62.0f));
+  int textHeight = 52; // this puts text above fuel level but may collide with new text on top: level1Height < level2Height ? level1Height - 1 : level2Height - 1;
   char outputStr[15];
 
   u8g2.firstPage();
@@ -347,6 +364,10 @@ void drawFuelInfo() {
     getAvgConsumptionStr(outputStr);
     u8g2.drawStr(43, 18, outputStr);
 
+    getAvgSpeedStr(outputStr);
+    u8g2.drawStr(43, 28, outputStr);
+
+    u8g2.setDrawColor(2); // XOR draw mode
     getFuelLevelStr(outputStr, 1);
     u8g2.drawStr(1, textHeight, outputStr);
 
@@ -360,6 +381,57 @@ void drawFuelInfo() {
     u8g2.drawTriangle(0,level1Height, 0,64, 128,64);
     // fuel level 2
     u8g2.drawTriangle(0,level1Height, 128,level2Height, 128,64);
+    u8g2.setDrawColor(1); // normal draw mode
+  } while( u8g2.nextPage() );
+}
+
+// displays information from the PDC
+void drawPDCsensors() {
+  char outputStr[8];
+
+  u8g2.firstPage();
+  do {
+    getPDCstr(outputStr, 5, true); // front-L2
+    u8g2.drawStr(15, 8, outputStr);
+
+    getPDCstr(outputStr, 4, true); // front-L
+    u8g2.drawStr(1, 19, outputStr);
+
+    getPDCstr(outputStr, 6, false); // front-R2
+    u8g2.drawStr(76, 8, outputStr);
+
+    getPDCstr(outputStr, 7, false); // front-R
+    u8g2.drawStr(92, 19, outputStr);
+
+    getPDCstr(outputStr, 0, true); // rear-L
+    u8g2.drawStr(1, 52, outputStr);
+
+    getPDCstr(outputStr, 1, true); // rear-L2
+    u8g2.drawStr(15, 63, outputStr);
+
+    getPDCstr(outputStr, 3, false); // rear-R
+    u8g2.drawStr(92, 52, outputStr);
+
+    getPDCstr(outputStr, 2, false); // rear-R2
+    u8g2.drawStr(76, 63, outputStr);
+
+    // center radar-thingy
+    u8g2.drawDisc(63, 31, 2);
+    // inner
+    u8g2.drawArc(63, 31, 6, 11, 53);
+    u8g2.drawArc(63, 31, 6, 75, 117);
+    u8g2.drawArc(63, 31, 6, 139, 181);
+    u8g2.drawArc(63, 31, 6, 203, 245);
+    // middle
+    u8g2.drawArc(63, 31, 12, 11, 53);
+    u8g2.drawArc(63, 31, 12, 75, 117);
+    u8g2.drawArc(63, 31, 12, 139, 181);
+    u8g2.drawArc(63, 31, 12, 203, 245);
+    // outer
+    u8g2.drawArc(63, 31, 18, 11, 53);
+    u8g2.drawArc(63, 31, 18, 75, 117);
+    u8g2.drawArc(63, 31, 18, 139, 181);
+    u8g2.drawArc(63, 31, 18, 203, 245);
   } while( u8g2.nextPage() );
 }
 

@@ -37,11 +37,12 @@ I still have to test if this approach is viable, regarding delay, reliability an
 | 0x0A8 | Engine torque to compute power, brake and clutch status | Yes |
 | 0x0AA | Throttle position, engine RPM | Yes |
 | 0x0C8 | Steering wheel angle/position | Yes |
+| 0x1C2 | PDC (park distance control) sensors | To be tested |
 | 0x1D0 | Engine temperature | Yes |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | Yes, except for disk button (not a top priority though) |
 | 0x330 | Range | To be tested |
 | 0x349 | Fuel level sensors (car has two) | Yes |
-| 0x362 | Average fuel consumption | To be tested |
+| 0x362 | Average fuel consumption, avg. speed | To be tested |
 | 0x3B4 | Battery voltage | Yes |
 
 ## Execution of the plan

@@ -14,6 +14,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   short engineTemp; // in celcius
   unsigned short engineRpm;
   unsigned short range; // in km
@@ -22,12 +23,13 @@ typedef struct kcan_data {
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
   float avgConsumption; // units unclear atm
+  float avgSpeed; // units unclear atm
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 // initialize data differently from receiver to "dry test" without connection to car
-kcan_data data = {true, false, 0, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 1.0f, 0.75d, -0.5d};
+kcan_data data = {true, false, 0, {1}, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.75d, -0.5d};
 esp_now_peer_info_t receiverInfo;
 esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
@@ -144,6 +146,10 @@ void dataTaskCode(void * params) {
           setSteeringPosition(buf[0], buf[1]);
           break;
 
+        case 0x1C2:
+          setPDCsensors(buf, len);
+          break;
+
         case 0x1D0:
           setEngineTemp(buf[0]);
           break;
@@ -158,6 +164,11 @@ void dataTaskCode(void * params) {
 
         case 0x349:
           setFuelLevels(buf[0], buf[1], buf[2], buf[3]);
+          break;
+
+        case 0x362:
+          setAvgConsumption(buf[1], buf[2]);
+          setAvgSpeed(buf[0], buf[1]);
           break;
 
         case 0x3B4:
@@ -177,7 +188,7 @@ void senderTaskCode(void * params) {
 
   while(1) {
     esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(lastSendStatus != 0 ? 1000 : 100); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+    delay(lastSendStatus != 0 ? 1000 : 50); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
   }
 }
 
@@ -221,6 +232,13 @@ void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
 
   data.steeringPosition = (double)combined / 12800.0d;
+}
+
+// from 0x1C2
+void setPDCsensors(unsigned char* values, unsigned char len) { // len should always be 8, just to be safe
+  for(int i = 0; i < len; i++) {
+    data.PDCsensors[i] = values[i];
+  }
 }
 
 // from 0x1D0
@@ -283,6 +301,12 @@ void setFuelLevels(unsigned char byte0, unsigned char byte1, unsigned char byte2
 // from 0x362
 void setAvgConsumption(unsigned char byte1, unsigned char byte2) {
   data.avgConsumption = (float)(((unsigned short)byte2 << 8) + ((unsigned short)byte1 >> 4)) / 10.0f;
+}
+
+// from 0x362
+void setAvgSpeed(unsigned char byte0, unsigned char byte1) {
+  // yes, shifting in 2 steps is intentional here
+  data.avgSpeed = (float)(((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10.0f;
 }
 
 // from 0x3B4
