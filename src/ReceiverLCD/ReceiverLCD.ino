@@ -12,8 +12,8 @@
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors
-#define LCDSTATE_COUNT 4 // number of available states of the lcd
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = testing
+#define LCDSTATE_COUNT 5 // number of available states of the lcd
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -22,6 +22,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   short engineTemp; // in celcius
   unsigned short engineRpm;
@@ -30,8 +31,8 @@ typedef struct kcan_data {
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
-  float avgConsumption; // units unclear atm
-  float avgSpeed; // units unclear atm
+  float avgConsumption; // in l/100km (dependent on the car settings)
+  float avgSpeed; // in km/h (dependent on the car settings)
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
@@ -76,6 +77,9 @@ void setup() {
   // register callback function
   esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
   Serial.println("Succesfully initialized ESP-NOW");
+  
+  Serial.print("Expecting ESP-NOW messages at a size of: ");
+  Serial.println(sizeof(data));
 
   showStartupLogo(2500);
 
@@ -84,7 +88,7 @@ void setup() {
                     "renderingTask",      // name of task
                     10000,                // Stack size of task
                     NULL,                 // parameter of the task
-                    1,                    // priority of the task
+                    2,                    // priority of the task
                     &RenderingTask,       // Task handle to keep track of created task
                     1);                   // pin task to core 1
 
@@ -173,7 +177,7 @@ void userInputTaskCode(void * params) {
       Serial.println("Disk button (steering wheel) pressed");
     }
 
-    delay(pressed ? 450 : 1); // if pressed avoid multiple triggers, if not avoid triggering watchdog timeout
+    delay(pressed ? 450 : 2); // if pressed avoid multiple triggers, if not avoid triggering watchdog timeout
     pressed = false;
   }
 }
@@ -185,7 +189,7 @@ void renderingTaskCode(void * params) {
 
   while(1) {
     updateDisplay();
-    delay(50);
+    delay(60); // ~16 refreshes/s
   }
 }
 
@@ -209,6 +213,10 @@ void updateDisplay() {
     // displays PDC sensor distances
     case 3:
       drawPDCsensors();
+    break;
+
+    case 4:
+      drawTestingScreen();
     break;
   }
 }
@@ -255,11 +263,11 @@ void getRangeStr(char* rangeStr) {
 }
 
 void getAvgConsumptionStr(char* consStr) {
-  sprintf(consStr, "%.1f l/100km ?", data.avgConsumption);
+  sprintf(consStr, "%.1f l/100km", data.avgConsumption);
 }
 
 void getAvgSpeedStr(char* speedStr) {
-  sprintf(speedStr, "%.1f km/h ?", data.avgSpeed);
+  sprintf(speedStr, "%.1f km/h", data.avgSpeed);
 }
 
 void getPDCstr(char* pdcStr, unsigned char index, bool left) {
@@ -432,6 +440,16 @@ void drawPDCsensors() {
     u8g2.drawArc(63, 31, 18, 75, 117);
     u8g2.drawArc(63, 31, 18, 139, 181);
     u8g2.drawArc(63, 31, 18, 203, 245);
+  } while( u8g2.nextPage() );
+}
+
+// for testing stuff
+void drawTestingScreen() {
+  char outputStr[5];
+
+  do {
+    sprintf(outputStr, "shiftLeverPos: %d", data.shiftLeverPos)
+    u8g2.drawStr(1, 8, outputStr);
   } while( u8g2.nextPage() );
 }
 

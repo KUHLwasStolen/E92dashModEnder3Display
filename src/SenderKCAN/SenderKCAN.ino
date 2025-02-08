@@ -14,6 +14,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   short engineTemp; // in celcius
   unsigned short engineRpm;
@@ -22,8 +23,8 @@ typedef struct kcan_data {
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
   float batteryVoltage; // in volts
-  float avgConsumption; // units unclear atm
-  float avgSpeed; // units unclear atm
+  float avgConsumption; // in l/100km (dependent on the car settings)
+  float avgSpeed; // in km/h (dependent on the car settings)
   double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
@@ -76,6 +77,9 @@ void setup() {
     ESP.restart();
   }
   Serial.println("ESP-NOW init successful!");
+
+  Serial.print("Sending ESP-NOW messages at a size of: ");
+  Serial.println(sizeof(data));
 
   /* ATTENTION: We are interfacing a 100KBPS CAN bus but need to use the 200KBPS variable
      This is needed because the library expects a MCP module with a 16MHz crystal on it
@@ -154,6 +158,10 @@ void dataTaskCode(void * params) {
           setEngineTemp(buf[0]);
           break;
 
+        case 0x1D2:
+          set...
+          break;
+
         case 0x1D6:
           setSteeringWheelButtons(buf[0], buf[1]);
           break;
@@ -188,7 +196,7 @@ void senderTaskCode(void * params) {
 
   while(1) {
     esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(lastSendStatus != 0 ? 1000 : 50); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+    delay(lastSendStatus != 0 ? 1000 : 60); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
   }
 }
 
@@ -246,6 +254,11 @@ void setEngineTemp(unsigned char byte0) {
   data.engineTemp = (signed short)byte0 - 48;
 }
 
+// from 0x1D2
+void setShiftLeverPos(unsigned char byte0) {
+  data.shiftLeverPos = (unsigned char)(byte0 << 4) >> 4; // shift out left 4 bits
+}
+
 // from 0x1D6
 void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
   // the steering wheel has 8 buttons --> to be space efficient store them in one unsigned char
@@ -300,12 +313,12 @@ void setFuelLevels(unsigned char byte0, unsigned char byte1, unsigned char byte2
 
 // from 0x362
 void setAvgConsumption(unsigned char byte1, unsigned char byte2) {
-  data.avgConsumption = (float)(((unsigned short)byte2 << 8) + ((unsigned short)byte1 >> 4)) / 10.0f;
+  data.avgConsumption = (float)(((unsigned short)byte2 << 4) + ((unsigned short)byte1 >> 4)) / 10.0f;
 }
 
 // from 0x362
 void setAvgSpeed(unsigned char byte0, unsigned char byte1) {
-  // yes, shifting in 2 steps is intentional here
+  // yes, shifting in 2 steps is intentional here, to get rid of the upper half
   data.avgSpeed = (float)(((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10.0f;
 }
 

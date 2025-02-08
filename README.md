@@ -37,12 +37,13 @@ I still have to test if this approach is viable, regarding delay, reliability an
 | 0x0A8 | Engine torque to compute power, brake and clutch status | Yes |
 | 0x0AA | Throttle position, engine RPM | Yes |
 | 0x0C8 | Steering wheel angle/position | Yes |
-| 0x1C2 | PDC (park distance control) sensors | To be tested |
+| 0x1C2 | PDC (park distance control) sensors | Yes |
 | 0x1D0 | Engine temperature | Yes |
+| 0x1D2 | Gear/shift related info | To be decoded properly |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | Yes, except for disk button (not a top priority though) |
-| 0x330 | Range | To be tested |
+| 0x330 | Range | Yes |
 | 0x349 | Fuel level sensors (car has two) | Yes |
-| 0x362 | Average fuel consumption, avg. speed | To be tested |
+| 0x362 | Average fuel consumption, avg. speed | Yes |
 | 0x3B4 | Battery voltage | Yes |
 
 ## Execution of the plan
@@ -95,7 +96,8 @@ Here you can find some links with useful information in relation to this project
 | Description | Link |
 |---|---|
 | This thread contains **A LOT** of information about the E9x KCAN, but it is also kind of all over the place so you have to dig a bit | https://www.e90post.com/forums/showthread.php?t=177272 |
-| Awesome work on decoding the BMW CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulas *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
+| Awesome work on decoding the BMW K-CAN bus system. But watch out, this work wasn't done on an E9X so CAN IDs and formulas *may* differ but should largely be the same. | https://www.loopybunny.co.uk/CarPC/k_can.html |
+| Another project decoding the BMW CAN bus, although it says PT-CAN I found a lot of overlap between the K- and PT-CAN | https://github.com/HeinrichG-V12/E65_ReverseEngineering |
 | A table I found with CAN bus IDs of the E9X and their meanings | https://github.com/kmalinich/node-bmw-ref/blob/master/canbus/e90-tool32-ids.csv |
 
 **Hardware related**
