@@ -12,8 +12,8 @@
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = testing
-#define LCDSTATE_COUNT 5 // number of available states of the lcd
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds, 5 = testing
+#define LCDSTATE_COUNT 6 // number of available states of the lcd
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -24,7 +24,9 @@ typedef struct kcan_data {
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
   unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
-  short engineTemp; // in celcius
+  signed short engineTemp; // in celcius
+  signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
+  unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
   unsigned short range; // in km
   float fuelLevel1; // in liter
@@ -37,8 +39,7 @@ typedef struct kcan_data {
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
-// initialize with default values
-kcan_data data = {false, false, 0, {0}, 0, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0d, 0.0d};
+kcan_data data;
 
 // executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int len) {
@@ -215,7 +216,12 @@ void updateDisplay() {
       drawPDCsensors();
     break;
 
+    // displays wheel speeds and overall speed
     case 4:
+      drawSpeeds();
+    break;
+
+    case 5:
       drawTestingScreen();
     break;
   }
@@ -270,8 +276,12 @@ void getAvgSpeedStr(char* speedStr) {
   sprintf(speedStr, "%.1f km/h", data.avgSpeed);
 }
 
-void getPDCstr(char* pdcStr, unsigned char index, bool left) {
-  sprintf(pdcStr, left ? "%d cm": "%3d cm", data.PDCsensors[index]);
+void getPDCstr(char* pdcStr, unsigned char index, bool displayedLeft) {
+  sprintf(pdcStr, displayedLeft ? "%d cm": "%3d cm", data.PDCsensors[index]);
+}
+
+void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
+  sprintf(speedStr, displayedLeft ? "%d km/h" : "%3d km/h", index < 4 ? data.wheelSpeeds[index] : data.speed);
 }
 
 
@@ -443,12 +453,36 @@ void drawPDCsensors() {
   } while( u8g2.nextPage() );
 }
 
+// displays wheel speeds and overall speed
+void drawSpeeds() {
+  char outputStr[11];
+
+  u8g2.firstPage();
+  do {
+    getSpeedStr(outputStr, 0, true); // front-L
+    u8g2.drawStr(1, 8, "100 km/h");
+
+    getSpeedStr(outputStr, 1, false); // front-R
+    u8g2.drawStr(80, 8, "100 km/h");
+
+    getSpeedStr(outputStr, 2, true); // rear-L
+    u8g2.drawStr(1, 63, "100 km/h");
+
+    getSpeedStr(outputStr, 3, false); // rear-R
+    u8g2.drawStr(80, 63, "100 km/h");
+
+    getSpeedStr(outputStr, 4, false); // overall
+    u8g2.drawStr(41, 34, "100 km/h");
+  } while( u8g2.nextPage() );
+}
+
 // for testing stuff
 void drawTestingScreen() {
   char outputStr[5];
 
+  u8g2.firstPage();
   do {
-    sprintf(outputStr, "shiftLeverPos: %d", data.shiftLeverPos)
+    sprintf(outputStr, "shiftLeverPos: %d", data.shiftLeverPos);
     u8g2.drawStr(1, 8, outputStr);
   } while( u8g2.nextPage() );
 }

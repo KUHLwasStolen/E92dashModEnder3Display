@@ -16,7 +16,9 @@ typedef struct kcan_data {
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
   unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
-  short engineTemp; // in celcius
+  signed short engineTemp; // in celcius
+  signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
+  unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
   unsigned short range; // in km
   float fuelLevel1; // in liter
@@ -29,8 +31,7 @@ typedef struct kcan_data {
   double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
-// initialize data differently from receiver to "dry test" without connection to car
-kcan_data data = {true, false, 0, {1}, 1, 1, 1, 58.2f, 45.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.75d, -0.5d};
+kcan_data data;
 esp_now_peer_info_t receiverInfo;
 esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
@@ -150,6 +151,14 @@ void dataTaskCode(void * params) {
           setSteeringPosition(buf[0], buf[1]);
           break;
 
+        case 0xCE:
+          setWheelSpeeds(buf, len);
+          break;
+
+        case 0x1A0:
+          setSpeed(buf[0], buf[1]);
+          break;
+
         case 0x1C2:
           setPDCsensors(buf, len);
           break;
@@ -159,7 +168,7 @@ void dataTaskCode(void * params) {
           break;
 
         case 0x1D2:
-          set...
+          setShiftLeverPos(buf[0]);
           break;
 
         case 0x1D6:
@@ -205,8 +214,8 @@ void senderTaskCode(void * params) {
 // from 0x0A8
 void setEngineTorque(unsigned char byte1, unsigned char byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
-  signed short combined = ((unsigned short)byte2 << 8) + (unsigned short)byte1;
-  data.engineTorque = (float)combined / 32.0f;
+  signed short combined = (signed short)(((unsigned short)byte2 << 8) + (unsigned short)byte1) >> 4; // rightmost 4 bits are a status message
+  data.engineTorque = (float)combined / 2.0f;
 }
 
 // from 0x0A8
@@ -240,6 +249,18 @@ void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
 
   data.steeringPosition = (double)combined / 12800.0d;
+}
+
+// from 0x0CE
+void setWheelSpeeds(unsigned char* values, unsigned char len) { // len should always be 8, just to be safe
+  for(int i = 0; i < len / 2; i++) {
+    data.wheelSpeeds[i] = (signed short)(((unsigned short)values[(2 * i) + 1] << 8) + (unsigned short)values[2 * i]) / 16;
+  }
+}
+
+// from 0x1A0
+void setSpeed(unsigned char byte0, unsigned char byte1) {
+  data.speed = (((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10;
 }
 
 // from 0x1C2

@@ -34,23 +34,26 @@ I still have to test if this approach is viable, regarding delay, reliability an
 #### Relevant information from KCAN
 | CAN-ID | Description | Successful? |
 |---|---|---|
-| 0x0A8 | Engine torque to compute power, brake and clutch status | Yes |
-| 0x0AA | Throttle position, engine RPM | Yes |
-| 0x0C8 | Steering wheel angle/position | Yes |
-| 0x1C2 | PDC (park distance control) sensors | Yes |
-| 0x1D0 | Engine temperature | Yes |
+| 0x0A8 | Engine torque to compute power, brake and clutch status | **Yes** |
+| 0x0AA | Throttle position, engine RPM | **Yes** |
+| 0x0C8 | Steering wheel angle/position | **Yes** |
+| 0x0CE | Wheel speeds | To be tested |
+| 0x1A0 | Vehicle speed | To be tested |
+| 0x1C2 | PDC (park distance control) sensors | **Yes** |
+| 0x1D0 | Engine temperature | **Yes** |
 | 0x1D2 | Gear/shift related info | To be decoded properly |
-| 0x1D6 | Steering wheel buttons, as not all of them do something in my car | Yes, except for disk button (not a top priority though) |
-| 0x330 | Range | Yes |
-| 0x349 | Fuel level sensors (car has two) | Yes |
-| 0x362 | Average fuel consumption, avg. speed | Yes |
-| 0x3B4 | Battery voltage | Yes |
+| 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
+| 0x330 | Range | **Yes** |
+| 0x349 | Fuel level sensors (car has two) | **Yes** |
+| 0x362 | Average fuel consumption, avg. speed | **Yes** |
+| 0x3B4 | Battery voltage | **Yes** |
 
 ## Execution of the plan
 Tapping into the KCAN in the trunk of the car was successful.  
 I have received all of the expected IDs and the data seems to be accurate/converted properly, which I still have to verify in more detail.  
 **Tip:** If you are attempting the same procedure as me, remove the trim panels in the battery area, not only the battery cover.  
 I did not and it was *very* tedious due to the space constraints (2 hours for splicing 2 wires).  
+**ALSO: Keep away from the black/yellow twisted pair cables going to the battery. They are there for disconnecting the battery in an emergency and should not be messed with!**
 
 At the moment I get the power for the ESP32 with the MCP from the 12V connector in the trunk.  
 This connector is on when the ignition is on.  
