@@ -24,12 +24,12 @@ But at least for testing it seems to be the most promising and safest location t
 Again, this may vary depending on the options installed in your car.  
 
 **Update:** To solve the problem with the ESP in the trunk and display in the front, I have come to the conclusion that it is probably best to deviate from the originally planned all-in-one solution.  
-I am now pretty sure that I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
+I am now sure that I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
 Then I want another ESP32 with the LCD on the dash of the car.  
 Communication between them is handled via ESP-NOW.  
 This solution avoids having to run long wires through the car or having to tap into the KCAN in places where I'm not comfortable.  
 Another advantage is that this allows us to expand the network of devices in the car pretty easily.  
-I still have to test if this approach is viable, regarding delay, reliability and so on, but from my research it seems promising...
+From my testing during development, this approach has been very reliable and also responsive. I have also found similar projects using ESP-NOW, which seems to support my findings.  
 
 #### Relevant information from KCAN
 | CAN-ID | Description | Successful? |
@@ -85,7 +85,7 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | ESP32-WROOM-32 dev module | 2 | most other ESPs should also work, just connect everything to the right GPIOs | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
 | MCP2515 CAN bus module | 1 | yes, odd choice in combination with ESP32, I just use what I already had | https://www.az-delivery.de/en/products/mcp2515-can-bus-modul?_pos=1&_psq=MCP2515&_ss=e&_v=1.0 |
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
-| 10k Ohm resistor | 1 | used as a pullup, similar values may also work |  |
+| 10k Ohm resistor | 3 | used as pullups, similar values may also work |  |
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |

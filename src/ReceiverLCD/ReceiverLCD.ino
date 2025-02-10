@@ -3,8 +3,10 @@
 #include <SPI.h>
 #include <U8g2lib.h>
 
+#define EN2_PIN 23
+#define EN1_PIN 22
+#define ENC_PIN 21
 #define LCD_POWER_PIN 27
-#define ENC_PIN 26
 #define LCD_CS_PIN 14
 #define LCD_SCK_PIN 13
 #define LCD_MOSI_PIN 12
@@ -13,7 +15,8 @@
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds, 5 = testing
-#define LCDSTATE_COUNT 6 // number of available states of the lcd
+#define LCDSTATE_COUNT 6 // number of available states of the lcd (which actually display info, another one for selecting things is automatically added)
+unsigned char selectedLine = 0; // for screens that use user selection
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -52,6 +55,7 @@ void setup() {
 
   pinMode(LCD_POWER_PIN, OUTPUT);
   pinMode(ENC_PIN, INPUT);
+  pinMode(EN1_PIN, INPUT);
 
   digitalWrite(LCD_POWER_PIN, HIGH); // turn on lcd
   
@@ -118,67 +122,73 @@ void userInputTaskCode(void * params) {
     // Encoder button
     if(digitalRead(ENC_PIN) == 0) {
       pressed = true;
+      selectedLine = 0;
       Serial.println("Encoder button pressed");
       
       if(lcdState == 0) {
         // Turn on lcd
         Serial.println("Turning on LCD");
         digitalWrite(LCD_POWER_PIN, HIGH);
-        delay(25); // give it a bit of time to turn on again
+        delay(30); // give it a bit of time to turn on again
         u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
       }
 
-      lcdState = (lcdState + 1) % LCDSTATE_COUNT;
+      lcdState = (lcdState + 1) % (LCDSTATE_COUNT + 1);
 
       if(lcdState == 0) {
-        // Turn off lcd
-        Serial.println("Turning off LCD");
-        digitalWrite(LCD_POWER_PIN, LOW);
+        if(selectedLine == 1) {
+          // Turn off lcd
+          Serial.println("Turning off LCD");
+          digitalWrite(LCD_POWER_PIN, LOW);
+        } else {
+          lcdState = 1; // go back to the first page
+        }
       }
     }
 
+    // Encoder rotate (no direction only rotate)
+    if(digitalRead(EN1_PIN) == 0) {
+      pressed = true;
+      Serial.println("Rotated");
+      selectedLine = (selectedLine + 1) % 2;
+    }
 
+
+    // Steering wheel buttons
     if(volumeUpPressed()) {
       pressed = true;
       Serial.println("Volume up (steering wheel) pressed");
     }
-
     if(volumeDownPressed()) {
       pressed = true;
       Serial.println("Volume down (steering wheel) pressed");
     }
-
     if(upPressed()) {
       pressed = true;
       Serial.println("Up button (steering wheel) pressed");
     }
-
     if(downPressed()) {
       pressed = true;
       Serial.println("Down button (steering wheel) pressed");
     }
-
     if(telephonePressed()) {
       pressed = true;
       Serial.println("Telephone button (steering wheel) pressed");
     }
-
     if(voicePressed()) {
       pressed = true;
       Serial.println("Voice button (steering wheel) pressed");
     }
-
     if(rotatePressed()) {
       pressed = true;
       Serial.println("Rotate button (steering wheel) pressed");
     }
-
     if(diskPressed()) {
       pressed = true;
       Serial.println("Disk button (steering wheel) pressed");
     }
 
-    delay(pressed ? 450 : 2); // if pressed avoid multiple triggers, if not avoid triggering watchdog timeout
+    delay(pressed ? 450 : 1); // if pressed avoid multiple triggers, if not yield
     pressed = false;
   }
 }
@@ -221,8 +231,13 @@ void updateDisplay() {
       drawSpeeds();
     break;
 
+    // temporary page for decoding stuff
     case 5:
       drawTestingScreen();
+    break;
+
+    case LCDSTATE_COUNT:
+      drawSelectorScreen();
     break;
   }
 }
@@ -476,9 +491,24 @@ void drawSpeeds() {
   } while( u8g2.nextPage() );
 }
 
+// always the last page
+void drawSelectorScreen() {
+  u8g2.firstPage();
+  do {
+    u8g2.setDrawColor(2); // XOR mode
+
+    u8g2.drawBox(0, 10 * selectedLine, u8g2.getDisplayWidth(), 10);
+
+    u8g2.drawStr(1, 8, "Next");
+    u8g2.drawStr(1, 18, "LCD off");
+
+    u8g2.setDrawColor(1); // normal mode
+  } while( u8g2.nextPage() );
+}
+
 // for testing stuff
 void drawTestingScreen() {
-  char outputStr[5];
+  char outputStr[21];
 
   u8g2.firstPage();
   do {
