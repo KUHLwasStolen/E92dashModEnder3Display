@@ -1,6 +1,7 @@
 # E92dashModEnder3Screen
 Chaotic name, simple mission.  
 I have the old LCD from my Creality Ender 3 Pro, which I don't need anymore, because I'm running it headless with Klipper and I want to use it to display some additional information on the dash of my BMW E92.  
+Additionally the project comes with an optional/modular data logger addon, to record the sniffed telemetry data.  
 
 The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.    
 
@@ -85,6 +86,8 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | ESP32-WROOM-32 dev module | 2 | most other ESPs should also work, just connect everything to the right GPIOs | https://www.az-delivery.de/en/products/esp32-developmentboard?_pos=1&_psq=esp32+n&_ss=e&_v=1.0 |
 | MCP2515 CAN bus module | 1 | yes, odd choice in combination with ESP32, I just use what I already had | https://www.az-delivery.de/en/products/mcp2515-can-bus-modul?_pos=1&_psq=MCP2515&_ss=e&_v=1.0 |
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
+| (SD card module) | (1) | OPTIONAL: this is an optional feature to log the collected telemetry, this can also be added later and doesn't need a code update | https://www.velleman.eu/products/view/sd-card-logging-shield-for-arduino-2-pcs-vma304/?id=435522&lang=en (I have exactly these, didn't buy them there though) |
+| (SD card) | (1) | if you want to use the optional data logger you will need an SD card |  |
 | 10k Ohm resistor | 3 | used as pullups, similar values may also work |  |
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
@@ -108,4 +111,4 @@ Here you can find some links with useful information in relation to this project
 |---|---|
 | My source for the Ender3 LCD pinout | https://github.com/rfblock/ender3-lcd-arduino |
 | Library used to drive LCD (can be downloaded via Arduino IDE) | https://github.com/olikraus/u8g2 |
-| Library used to drive MCP2515 module (can be downloaded via Arduino IDE) | https://github.com/ttlappalainen/CAN_BUS_Shield |
+| Library used to drive MCP2515 module (can be downloaded via Arduino IDE) | https://github.com/Seeed-Studio/Seeed_Arduino_CAN |

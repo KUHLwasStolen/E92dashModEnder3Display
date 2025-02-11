@@ -2,10 +2,18 @@
 #include <WiFi.h>
 #include <SPI.h>
 #include <mcp2515_can.h>
+#include <SD.h>
+#include <FS.h>
 
 #define CAN_CS_PIN 5
 
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the receiver code!
+
+#define SD_MISO 13
+#define SD_SCLK 14
+#define SD_CS 15
+#define SD_MOSI 27
+#define HSPI_FRQ 32000000
 
 // Replace with the MAC address of your receiver! (see serial output of the receiver)
 uint8_t LCDreceiverAddress[] = {0x58, 0xBF, 0x25, 0x9D, 0xF5, 0x70};
@@ -37,8 +45,12 @@ esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
 mcp2515_can CAN(CAN_CS_PIN);
 
+SPIClass hspi(HSPI);
+bool loggingModule = false;
+
 TaskHandle_t DataTask;
 TaskHandle_t SenderTask;
+TaskHandle_t LoggerTask;
 
 // called when a data package is sent
 void OnDataSent(const uint8_t * mac_addr, esp_now_send_status_t status) {
@@ -55,6 +67,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setChannel(ESP_NOW_CHANNEL);
   while (!WiFi.STA.started()) {
+    Serial.println("\nStarting Wifi...");
     delay(100);
   }
 
@@ -81,6 +94,8 @@ void setup() {
 
   Serial.print("Sending ESP-NOW messages at a size of: ");
   Serial.println(sizeof(data));
+  Serial.println();
+
 
   /* ATTENTION: We are interfacing a 100KBPS CAN bus but need to use the 200KBPS variable
      This is needed because the library expects a MCP module with a 16MHz crystal on it
@@ -96,25 +111,51 @@ void setup() {
     //  if we don't set this mode i assume that the MCP sends an acknowledge message when messages are received and the car does NOT like this AT ALL
     CAN.setMode(MODE_LISTENONLY); // this is very important!!!
   } while(CAN.getMode() != MODE_LISTENONLY);
-  Serial.println("CAN bus initialized successfully");
+  Serial.println("CAN bus initialized successfully\n");
+
+
+  // Init SD card ( or not :) )
+  hspi.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS); // use other SPI bus for the SD card to not interrupt the MCP
+  hspi.setFrequency(HSPI_FRQ);
+  pinMode(SD_CS, OUTPUT);
+  if(!SD.begin(SD_CS, hspi, HSPI_FRQ) || SD.cardType() == CARD_NONE) {
+    Serial.println("SD card module not connected or no card inserted");
+  } else {
+    loggingModule = true;
+    Serial.println("SD card module initialized successfully");
+    Serial.printf("SD storage: %lluMiB / %lluMiB\n", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024));
+  }
+  Serial.println();
+
+
+  xTaskCreatePinnedToCore(
+                    senderTaskCode, // Task function.
+                    "senderTask",   // name of task.
+                    5000,           // Stack size of task
+                    NULL,           // parameter of the task
+                    2,              // priority of the task
+                    &SenderTask,    // Task handle to keep track of created task
+                    0);             // pin task to core 0
+  
+  if(loggingModule) {
+    xTaskCreatePinnedToCore(
+                    loggerTaskCode, // Task function.
+                    "loggerTask",   // name of task.
+                    5000,           // Stack size of task
+                    NULL,           // parameter of the task
+                    1,              // priority of the task
+                    &LoggerTask,    // Task handle to keep track of created task
+                    0);             // pin task to core 0
+  }
 
   xTaskCreatePinnedToCore(
                     dataTaskCode,   // Task function.
                     "dataTask",     // name of task.
                     10000,          // Stack size of task
                     NULL,           // parameter of the task
-                    1,              // priority of the task
+                    2,              // priority of the task
                     &DataTask,      // Task handle to keep track of created task
-                    1);             // pin task to core 1
-
-  xTaskCreatePinnedToCore(
-                    senderTaskCode, // Task function.
-                    "senderTask",   // name of task.
-                    10000,          // Stack size of task
-                    NULL,           // parameter of the task
-                    1,              // priority of the task
-                    &SenderTask,    // Task handle to keep track of created task
-                    0);             // pin task to core 0
+                    1);             // pin task to core 1                  
 }
 
 
@@ -206,6 +247,64 @@ void senderTaskCode(void * params) {
   while(1) {
     esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
     delay(lastSendStatus != 0 ? 1000 : 60); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+  }
+}
+
+
+void loggerTaskCode(void * params) {
+  Serial.print("Logger task running on core ");
+  Serial.println(xPortGetCoreID());
+
+  File logRoot = SD.open("/BMW_KCAN_telemetryLog");
+  if(!logRoot) {
+    Serial.println("Creating log directory");
+
+    if (!SD.mkdir("/BMW_KCAN_telemetryLog")) {
+      Serial.println("Could not create log directory. Aborting...");
+      vTaskDelete(NULL);
+    }
+
+    logRoot = SD.open("/BMW_KCAN_telemetryLog");
+    if(!logRoot) {
+      Serial.println("Still could not access log directory. Aborting...");
+      vTaskDelete(NULL);
+    }
+  } else if(!logRoot.isDirectory()) {
+    Serial.println("Logging directory name taken. Aborting...");
+    vTaskDelete(NULL);
+  }
+
+  unsigned int fileCounter = 0;
+  File logFile = logRoot.openNextFile();
+  while (file) {
+    fileCounter++;
+    file = logRoot.openNextFile();
+  }
+
+  char printString[256];
+  sprintf(printString, "/BMW_KCAN_telemetryLog/log_%d.csv", fileCounter);
+  logFile = SD.open(printString, FILE_WRITE);
+  if(!logFile) {
+    Serial.println("Could not open log file for writing. Aborting...");
+    vTaskDelete(NULL);
+  }
+
+  if(!logFile.print("time; clutchPressed; brakePressed; ...\n")) {
+    Serial.println("Initial write to file failed. Aborting...");
+    vTaskDelete(NULL);
+  }
+
+  unsigned char flushCounter = 0;
+  while(1) {
+    sprintf(printString, "%lu; %d; %d; ...\n", millis(), data.clutchPressed, data.brakePressed);
+    logFile.print(printString);
+
+    flushCounter = (flushCounter + 1) % 8; // flush after every 8th log to not lose too much data, but also not overdo it
+    if(flushCounter == 0) {
+      logFile.flush();
+    }
+
+    delay(250); // better would be a precise timer but this is fine for now
   }
 }
 
