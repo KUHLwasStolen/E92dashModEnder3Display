@@ -38,8 +38,8 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
-  double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
+  float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 kcan_data data;
@@ -366,10 +366,10 @@ void drawMixedDash() {
     u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
 
     // Throttle position
-    u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0d), 5);
+    u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0f), 5);
 
     // Steering position
-    int barWidth = round(data.steeringPosition * 64.0d);
+    int barWidth = round(data.steeringPosition * 64.0f);
     if(barWidth >= 0) {
       u8g2.drawBox(64, 61, barWidth, 3);
     } else {

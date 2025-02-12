@@ -35,8 +35,8 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  double throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
-  double steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
+  float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
 } kcan_data;
 
 kcan_data data;
@@ -255,51 +255,24 @@ void loggerTaskCode(void * params) {
   Serial.print("Logger task running on core ");
   Serial.println(xPortGetCoreID());
 
-  File logRoot = SD.open("/BMW_KCAN_telemetryLog");
-  if(!logRoot) {
-    Serial.println("Creating log directory");
+  File logFile;
+  getLogFile(&logFile);
 
-    if (!SD.mkdir("/BMW_KCAN_telemetryLog")) {
-      Serial.println("Could not create log directory. Aborting...");
-      vTaskDelete(NULL);
-    }
-
-    logRoot = SD.open("/BMW_KCAN_telemetryLog");
-    if(!logRoot) {
-      Serial.println("Still could not access log directory. Aborting...");
-      vTaskDelete(NULL);
-    }
-  } else if(!logRoot.isDirectory()) {
-    Serial.println("Logging directory name taken. Aborting...");
-    vTaskDelete(NULL);
-  }
-
-  unsigned int fileCounter = 0;
-  File logFile = logRoot.openNextFile();
-  while (file) {
-    fileCounter++;
-    file = logRoot.openNextFile();
-  }
-
-  char printString[256];
-  sprintf(printString, "/BMW_KCAN_telemetryLog/log_%d.csv", fileCounter);
-  logFile = SD.open(printString, FILE_WRITE);
-  if(!logFile) {
-    Serial.println("Could not open log file for writing. Aborting...");
-    vTaskDelete(NULL);
-  }
-
-  if(!logFile.print("time; clutchPressed; brakePressed; ...\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;shiftLeverPos;engineTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;\n")) {
     Serial.println("Initial write to file failed. Aborting...");
-    vTaskDelete(NULL);
+    vTaskDelete(LoggerTask);
   }
 
+  char printString[1024];
   unsigned char flushCounter = 0;
   while(1) {
-    sprintf(printString, "%lu; %d; %d; ...\n", millis(), data.clutchPressed, data.brakePressed);
+    // use hex where possible to save space
+    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%f;%.1f;%.1f;%.1f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.shiftLeverPos,
+        data.engineTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.fuelLevel1, data.fuelLevel2, data.engineTorque, data.batteryVoltage,
+        data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition);
     logFile.print(printString);
 
-    flushCounter = (flushCounter + 1) % 8; // flush after every 8th log to not lose too much data, but also not overdo it
+    flushCounter = (flushCounter + 1) % 20; // flush after every 20th log to not lose too much data when power is shut off, but also not overdo it
     if(flushCounter == 0) {
       logFile.flush();
     }
@@ -333,7 +306,7 @@ void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
   // value between 255 and 65064 (don't ask me why)
   unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
 
-  data.throttlePercentage = (double)(combined - 255) / (double)(65064 - 255);
+  data.throttlePercentage = (float)(combined - 255) / (float)(65064 - 255);
 }
 
 // from 0x0AA
@@ -347,7 +320,7 @@ void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
   // negative means to the left and positive to the right --> value between -12800 and +12800 (-600° and 600°)
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
 
-  data.steeringPosition = (double)combined / 12800.0d;
+  data.steeringPosition = (float)combined / 12800.0f;
 }
 
 // from 0x0CE
@@ -446,4 +419,45 @@ void setAvgSpeed(unsigned char byte0, unsigned char byte1) {
 void setBatteryVoltage(unsigned char byte0, unsigned char byte1) {
   // (((Byte[1]-240 )*256)+Byte[0])/68 
   data.batteryVoltage = (float)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0f;
+}
+
+
+// ### Helper functions for logging ###
+void getLogFile(File* outputFile) {
+  File logRoot = SD.open("/BMW_KCAN_telemetryLog");
+  if(!logRoot) {
+    Serial.println("Creating log directory");
+
+    if (!SD.mkdir("/BMW_KCAN_telemetryLog")) {
+      Serial.println("Could not create log directory. Aborting...");
+      vTaskDelete(LoggerTask);
+    }
+
+    logRoot = SD.open("/BMW_KCAN_telemetryLog");
+    if(!logRoot) {
+      Serial.println("Still could not access log directory. Aborting...");
+      vTaskDelete(LoggerTask);
+    }
+  } else if(!logRoot.isDirectory()) {
+    Serial.println("Logging directory name taken. Aborting...");
+    vTaskDelete(LoggerTask);
+  }
+
+  unsigned int fileCounter = 0;
+  File logFile = logRoot.openNextFile();
+  while (logFile) {
+    fileCounter++;
+    logFile = logRoot.openNextFile();
+  }
+
+  char printString[64];
+
+  sprintf(printString, "/BMW_KCAN_telemetryLog/log_%d.csv", fileCounter);
+  logFile = SD.open(printString, FILE_WRITE);
+  if(!logFile) {
+    Serial.println("Could not open log file for writing. Aborting...");
+    vTaskDelete(LoggerTask);
+  }
+
+  *outputFile = logFile;
 }

@@ -59,8 +59,10 @@ I did not and it was *very* tedious due to the space constraints (2 hours for sp
 At the moment I get the power for the ESP32 with the MCP from the 12V connector in the trunk.  
 This connector is on when the ignition is on.  
 This is a very convenient solution, but not perfect.  
-I am thinking about implementing a logging system (data to SD) and for this it would be optimal if the ESP was still on a bit after the engine is stopped.  
+Because of the (optional) logging system it would be an advantage if the ESP could stay on for a bit after the car is turned off to close the log file.  
+Additionally I would like to display a summary of the drive after the car is turned off.  
 I know that there are power lines in the BMW that stay on for a while after the car is locked, but I couldn't find much information about this.  
+But for now, losing at max a few seconds at the end of the log is fine.  
 An alternative would be a small battery backup that keeps the ESP alive for a moment after the car is stopped.  
 I'm not a fan of an actual battery, but capacitors might do the trick(?).  
 
@@ -69,6 +71,8 @@ I assume that the cause for this was, that the ESP was sending acknowledgement m
 Seemingly the car does not like this **at all**. Setting the MCP mode to listen-only seems to fix this though.
 
 ## Schematic
+**(schematic not up to date!!)**
+
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
 I am not an expert at designing circuits and just want to give you a general idea about the correct wiring.  
 Any constructive input on how to improve the schematic is greatly appreciated!
