@@ -96,8 +96,9 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
-| M3x8 bolts | 3 | Used for the SD card breakout board |  |
-| M3 hex nuts | 3 | Used for the SD card breakout board |  |
+| M3x8 bolts | 7 | Used for the SD card breakout board, mounting the MCP |  |
+| M3x12 bolts | 4 | Used for attaching the sender lid |  |
+| M3 hex nuts | 7 | Used for the SD card breakout board, accessory mounting |  |
 | Jumper wires | 1 metric ton | will be replaced in the future by a less prototypie solution | |
 | Perf board + accessories |  | My plan for the final implementation in the car | https://www.amazon.com/Smraza-Soldering-Electronic-Compatible-Prototype/dp/B07NM68FXK/ref=sr_1_3 (I bought something similar) | 
 
