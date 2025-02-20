@@ -38,8 +38,8 @@ From my testing during development, this approach has been very reliable and als
 | 0x0A8 | Engine torque to compute power, brake and clutch status | **Yes** |
 | 0x0AA | Throttle position, engine RPM | **Yes** |
 | 0x0C8 | Steering wheel angle/position | **Yes** |
-| 0x0CE | Wheel speeds | To be tested |
-| 0x1A0 | Vehicle speed | To be tested |
+| 0x0CE | Wheel speeds | **Yes** |
+| 0x1A0 | Vehicle speed | **Yes** |
 | 0x1C2 | PDC (park distance control) sensors | **Yes** |
 | 0x1D0 | Engine temperature | **Yes** |
 | 0x1D2 | Gear/shift related info | To be decoded properly |

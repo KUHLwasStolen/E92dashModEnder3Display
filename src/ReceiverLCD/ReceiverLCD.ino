@@ -25,7 +25,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
+  unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
@@ -512,14 +512,14 @@ void drawTestingScreen() {
 
   u8g2.firstPage();
   do {
-    sprintf(outputStr, "shiftLeverPos: %d", data.shiftLeverPos);
+    sprintf(outputStr, "GearAct: %d / 0x%X", data.gearAct, data.gearAct);
     u8g2.drawStr(1, 8, outputStr);
   } while( u8g2.nextPage() );
 }
 
 // displays a simple one line string on the lcd
 void displayErrorMessage(char * message) {
-  u8g2.firstPage();
+  u8g2.firstPage();shiftLeverPos
   do {
     u8g2.setCursor(1,8);
     u8g2.print(message);

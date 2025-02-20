@@ -22,7 +22,7 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char shiftLeverPos; // on a manual car meaning: ?; on an automatic car: 0 "Off" 1 "P" 2 "R" 4 "N" 8 "D"
+  unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
@@ -184,8 +184,8 @@ void dataTaskCode(void * params) {
           break;
 
         case 0xAA:
-          setThrottlePercentage(buf[2], buf[3]);
-          setEngineRpm(buf[4], buf[5]);
+          setThrottlePercentage(buf[3]);
+          setEngineRpm(buf[4], buf[5], buf[6]);
           break;
 
         case 0xC8:
@@ -209,7 +209,7 @@ void dataTaskCode(void * params) {
           break;
 
         case 0x1D2:
-          setShiftLeverPos(buf[0]);
+          setGearAct(buf[1]);
           break;
 
         case 0x1D6:
@@ -258,7 +258,7 @@ void loggerTaskCode(void * params) {
   File logFile;
   getLogFile(&logFile);
 
-  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;shiftLeverPos;engineTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;gearAct;engineTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;\n")) {
     Serial.println("Initial write to file failed. Aborting...");
     vTaskDelete(LoggerTask);
   }
@@ -270,7 +270,7 @@ void loggerTaskCode(void * params) {
   Serial.println(logFile.name());
   while(1) {
     // use hex where possible to save space
-    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.shiftLeverPos,
+    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
         data.engineTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.fuelLevel1, data.fuelLevel2, data.engineTorque, data.batteryVoltage,
         data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition);
     logFile.print(printString);
@@ -305,25 +305,23 @@ void setBrakePressed(unsigned char byte7) {
 }
 
 // from 0x0AA
-void setThrottlePercentage(unsigned char byte2, unsigned char byte3) {
-  // value between 255 and 65064 (don't ask me why)
-  unsigned short combined = ((unsigned short)byte3 << 8) + (unsigned short)byte2;
-
-  data.throttlePercentage = (float)(combined - 255) / (float)(65064 - 255);
+void setThrottlePercentage(unsigned char byte3) {
+  data.throttlePercentage = ((float)byte3) / 255.0f;
 }
 
 // from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5) {
+void setEngineRpm(unsigned char byte4, unsigned char byte5, unsigned char byte6) {
+  if(byte6 % 2) return; // detect signal invalid state and dont set rpm if needed
   data.engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
 }
 
 // from 0x0C8
 void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
   // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23 and the max steering angle is 600°
-  // negative means to the left and positive to the right --> value between -12800 and +12800 (-600° and 600°)
+  // negative means to the left and positive to the right --> value between -13800 and +13800 (-600° and 600°)
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
 
-  data.steeringPosition = (float)combined / 12800.0f;
+  data.steeringPosition = (float)combined / 13800.0f;
 }
 
 // from 0x0CE
@@ -351,8 +349,8 @@ void setEngineTemp(unsigned char byte0) {
 }
 
 // from 0x1D2
-void setShiftLeverPos(unsigned char byte0) {
-  data.shiftLeverPos = (unsigned char)(byte0 << 4) >> 4; // shift out left 4 bits
+void setGearAct(unsigned char byte1) {
+  data.gearAct = (unsigned char)(byte1 >> 4); // shift out first 4 bits
 }
 
 // from 0x1D6
