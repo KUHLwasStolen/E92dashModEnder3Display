@@ -71,8 +71,6 @@ I assume that the cause for this was, that the ESP was sending acknowledgement m
 Seemingly the car does not like this **at all**. Setting the MCP mode to listen-only seems to fix this though.
 
 ## Schematic
-**(schematic not up to date!!)**
-
 The KiCAD schematic in this repository serves a purely symbolic purpose!  
 I am not an expert at designing circuits and just want to give you a general idea about the correct wiring.  
 Any constructive input on how to improve the schematic is greatly appreciated!

@@ -6,10 +6,10 @@
 #define EN2_PIN 23
 #define EN1_PIN 22
 #define ENC_PIN 21
-#define LCD_POWER_PIN 27
-#define LCD_CS_PIN 14
-#define LCD_SCK_PIN 13
-#define LCD_MOSI_PIN 12
+#define LCD_POWER_PIN 13
+#define LCD_CS_PIN 15
+#define LCD_SCK_PIN 14
+#define LCD_MOSI_PIN 27
 
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
