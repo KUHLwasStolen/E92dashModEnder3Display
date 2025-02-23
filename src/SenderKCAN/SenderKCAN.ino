@@ -25,10 +25,12 @@ typedef struct kcan_data {
   unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
+  signed short oilTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
   unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
   unsigned short range; // in km
+  unsigned short airPressEngine; // in hPa
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
@@ -37,6 +39,8 @@ typedef struct kcan_data {
   float avgSpeed; // in km/h (dependent on the car settings)
   float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float accelerationLong; // in m/s²
+  float accelerationCross; // in m/s²
 } kcan_data;
 
 kcan_data data;
@@ -185,7 +189,7 @@ void dataTaskCode(void * params) {
 
         case 0xAA:
           setThrottlePercentage(buf[3]);
-          setEngineRpm(buf[4], buf[5], buf[6]);
+          setEngineRpm(buf[4], buf[5]);
           break;
 
         case 0xC8:
@@ -198,6 +202,7 @@ void dataTaskCode(void * params) {
 
         case 0x1A0:
           setSpeed(buf[0], buf[1]);
+          setAcceleration(buf[2], buf[3], buf[4]);
           break;
 
         case 0x1C2:
@@ -206,6 +211,8 @@ void dataTaskCode(void * params) {
 
         case 0x1D0:
           setEngineTemp(buf[0]);
+          setOilTemp(buf[1]);
+          setAirPressEngine(buf[3]);
           break;
 
         case 0x1D2:
@@ -258,7 +265,7 @@ void loggerTaskCode(void * params) {
   File logFile;
   getLogFile(&logFile);
 
-  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;gearAct;engineTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;gearAct;engineTemp;oilTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong;accelCross;\n")) {
     Serial.println("Initial write to file failed. Aborting...");
     vTaskDelete(LoggerTask);
   }
@@ -270,9 +277,9 @@ void loggerTaskCode(void * params) {
   Serial.println(logFile.name());
   while(1) {
     // use hex where possible to save space
-    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
-        data.engineTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.fuelLevel1, data.fuelLevel2, data.engineTorque, data.batteryVoltage,
-        data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition);
+    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
+        data.engineTemp, data.oilTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.airPressEngine, data.fuelLevel1, data.fuelLevel2,
+        data.engineTorque, data.batteryVoltage, data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition, data.accelerationLong, data.accelerationCross);
     logFile.print(printString);
 
     flushCounter = (flushCounter + 1) % 20; // flush after every 20th log to not lose too much data when power is shut off, but also not overdo it
@@ -310,8 +317,7 @@ void setThrottlePercentage(unsigned char byte3) {
 }
 
 // from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5, unsigned char byte6) {
-  if(byte6 % 2) return; // detect signal invalid state and dont set rpm if needed
+void setEngineRpm(unsigned char byte4, unsigned char byte5) {
   data.engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
 }
 
@@ -336,6 +342,12 @@ void setSpeed(unsigned char byte0, unsigned char byte1) {
   data.speed = (((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10;
 }
 
+// from 0x1A0
+void setAcceleration(unsigned char byte2, unsigned char byte3, unsigned char byte4) {
+  data.accelerationLong = (((signed short)((signed char)(byte3 << 4)) << 4) + (signed short)byte2) / 40.0f;
+  data.accelerationCross = (((signed short)byte4 << 4) + ((signed short)byte3 >> 4)) / 40.0f;
+}
+
 // from 0x1C2
 void setPDCsensors(unsigned char* values, unsigned char len) { // len should always be 8, just to be safe
   for(int i = 0; i < len; i++) {
@@ -346,6 +358,16 @@ void setPDCsensors(unsigned char* values, unsigned char len) { // len should alw
 // from 0x1D0
 void setEngineTemp(unsigned char byte0) {
   data.engineTemp = (signed short)byte0 - 48;
+}
+
+// from 0x1D0
+void setOilTemp(unsigned char byte1) {
+  data.oilTemp = (signed short)byte1 - 48;
+}
+
+// from 0x1D0
+void setAirPressEngine(unsigned char byte3) {
+  data.airPressEngine = (((unsigned short)byte3) * 2) + 598;
 }
 
 // from 0x1D2

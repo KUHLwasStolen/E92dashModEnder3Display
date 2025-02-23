@@ -39,9 +39,9 @@ From my testing during development, this approach has been very reliable and als
 | 0x0AA | Throttle position, engine RPM | **Yes** |
 | 0x0C8 | Steering wheel angle/position | **Yes** |
 | 0x0CE | Wheel speeds | **Yes** |
-| 0x1A0 | Vehicle speed | **Yes** |
+| 0x1A0 | Vehicle speed, acceleration | Acceleration to be tested |
 | 0x1C2 | PDC (park distance control) sensors | **Yes** |
-| 0x1D0 | Engine temperature | **Yes** |
+| 0x1D0 | Engine-, oil-temperature, air pressure | air pressure, oil temperature to be tested |
 | 0x1D2 | Gear/shift related info | To be decoded properly |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
 | 0x330 | Range | **Yes** |

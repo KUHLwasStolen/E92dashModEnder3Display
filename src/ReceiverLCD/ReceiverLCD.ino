@@ -28,10 +28,12 @@ typedef struct kcan_data {
   unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
+  signed short oilTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
   unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
   unsigned short range; // in km
+  unsigned short airPressEngine; // in hPa
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
@@ -40,6 +42,8 @@ typedef struct kcan_data {
   float avgSpeed; // in km/h (dependent on the car settings)
   float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
   float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float accelerationLong; // in m/s²
+  float accelerationCross; // in m/s²
 } kcan_data;
 
 kcan_data data;
@@ -508,18 +512,30 @@ void drawSelectorScreen() {
 
 // for testing stuff
 void drawTestingScreen() {
-  char outputStr[21];
+  char outputStr[22];
 
   u8g2.firstPage();
   do {
     sprintf(outputStr, "GearAct: %d / 0x%X", data.gearAct, data.gearAct);
     u8g2.drawStr(1, 8, outputStr);
+
+    sprintf(outputStr, "Long: %.4f m/s*s", data.accelerationLong);
+    u8g2.drawStr(1, 18, outputStr);
+
+    sprintf(outputStr, "Cross: %.4f m/s*s", data.accelerationCross);
+    u8g2.drawStr(1, 28, outputStr);
+
+    sprintf(outputStr, "airPress: %d hPa", data.airPressEngine);
+    u8g2.drawStr(1, 38, outputStr);
+
+    sprintf(outputStr, "oilTemp: %d C", data.oilTemp);
+    u8g2.drawStr(1, 48, outputStr);
   } while( u8g2.nextPage() );
 }
 
 // displays a simple one line string on the lcd
 void displayErrorMessage(char * message) {
-  u8g2.firstPage();shiftLeverPos
+  u8g2.firstPage();
   do {
     u8g2.setCursor(1,8);
     u8g2.print(message);
