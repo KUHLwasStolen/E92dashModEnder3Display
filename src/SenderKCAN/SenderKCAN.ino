@@ -277,7 +277,7 @@ void loggerTaskCode(void * params) {
   Serial.println(logFile.name());
   while(1) {
     // use hex where possible to save space
-    sprintf(printString, "%.2f;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
+    sprintf(printString, "%.2f;%X;%X;%X;%X;%hX;%hX;%hX;%hX;%hX;%hX;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
         data.engineTemp, data.oilTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.airPressEngine, data.fuelLevel1, data.fuelLevel2,
         data.engineTorque, data.batteryVoltage, data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition, data.accelerationLong, data.accelerationCross);
     logFile.print(printString);
