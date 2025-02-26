@@ -7,6 +7,8 @@ std::string loggedDataStr = "time(s);clutchPressed;brakePressed;steeringWheelBut
 #define DATA_COUNT 25 // number of data points per line
 std::string readLine;
 
+int lineCount = 0;
+
 // Expects only file path as input
 int main(int argc, char *argv[]) {
 	if(argc != 2) {
@@ -19,6 +21,7 @@ int main(int argc, char *argv[]) {
 	// handle first line
 	if(getline(ReadFile, readLine) && readLine.compare(loggedDataStr) == 0) {
 		std::cout << "File verified, starting conversion." << std::endl;
+		lineCount++;
 	} else {
 		std::cout << "Invalid file passed!" << std::endl;
 		return 1;
@@ -33,6 +36,8 @@ int main(int argc, char *argv[]) {
 	std::string nextItem;
 	int value;
 	while(getline(ReadFile, readLine)) {
+		lineCount++;
+
 		for(int i = 0; i < DATA_COUNT; i++) {
 			nextItem = readLine.substr(0, readLine.find(delimiter));
 
@@ -73,7 +78,7 @@ int main(int argc, char *argv[]) {
 				case 9:		// wheel3
 				case 10:	// wheel4
 					value = stoul(nextItem, 0, 16);
-					value = value > 0xFFF ? value - 0xFFFF : value; 
+					value = value > 0xFFF ? value - 0x10000 : value; 
 					WriteFile << value << ";";
 					break;
 			}
@@ -83,6 +88,9 @@ int main(int argc, char *argv[]) {
 
 		WriteFile << std::endl;
 	}
+
+	std::cout << "Processed " << lineCount << " lines of data (" << (lineCount - 1) * DATA_COUNT << " data points)" << std::endl;
+	std::cout << "Converted data saved at " << writeFilePath << std::endl;
 
 	return 0;
 }
