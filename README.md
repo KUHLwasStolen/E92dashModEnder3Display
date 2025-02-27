@@ -77,11 +77,24 @@ Any constructive input on how to improve the schematic is greatly appreciated!
 
 ## Logging
 As mentioned above, the project offers optional logging capability.  
-Data is stored to a SD-card in .csv format. For space reasons non-floating-point values in HEX, so not really human readable.  
-I originally wanted to build (and in fact have built) a spreadsheet that takes the logged data, converts it and then plots it, making the process very user-friendly.  
-Unfortunately, I think I have overestimated the flexibility of such a solution (or I am just not skilled enough with spreadsheets...).  
-That said, I will probably have to pivot to a (semi-)custom solution, which allows the data to be plotted by some other tools.  
-(I will try to provide scripts to make the process as user-friendly as possible!)  
+Data is stored to a SD-card in .csv format. For space reasons non-floating-point values in HEX, so not really human readable or ready to easily plot.  
+The project offers a C++ program to convert the data back into decimal form, which is located [here](logging).  
+
+*Usage:*  
+```
+# first compile the program (only needed once)
+g++ dataConverter.cpp -o dataConverter
+
+# then convert your log
+./dataConverter [your_log.csv]
+```
+
+Then you can plot the converted data into a PDF with the python script in the same folder.  
+
+*Usage:*
+```
+python dataPlotter.py [your_log_converted.csv] [column index to plot]
+```
 
 ## Hardware
 Here you can find a list of materials needed for the project.  

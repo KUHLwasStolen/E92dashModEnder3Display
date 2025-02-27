@@ -13,6 +13,8 @@ int lineCount = 0;
 int main(int argc, char *argv[]) {
 	if(argc != 2) {
 		std::cout << "Illegal argument length!" << std::endl;
+		std::cout << "Usage: \'./dataConverter [log.csv]\'" << std::endl;
+		std::cout << "Example: \'./dataConverter testData.csv\'" << std::endl;
 		return 1;
 	}
 
@@ -32,6 +34,8 @@ int main(int argc, char *argv[]) {
 	writeFilePath.replace(writeFilePath.end()-4, writeFilePath.end(), "_converted.csv");
 	
 	std::ofstream WriteFile(writeFilePath);
+
+	WriteFile << loggedDataStr << std::endl;
 
 	std::string nextItem;
 	int value;
