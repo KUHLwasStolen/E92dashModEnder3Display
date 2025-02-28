@@ -75,6 +75,12 @@ The KiCAD schematic in this repository serves a purely symbolic purpose!
 I am not an expert at designing circuits and just want to give you a general idea about the correct wiring.  
 Any constructive input on how to improve the schematic is greatly appreciated!
 
+## 3D Models
+3D-printable enclosures and accessories can be found [here](cad/exports).  
+(Yes, most slicers are able to use .step files, most people are not aware of this).  
+All of the models are in their perfect printing orientation and do not *need* supports.  
+The only place where you might need a tiny bit of support is [this](cad/exports/SenderModels/Enclosure_top.step) model, on the small, straight overhang for the screw terminal.  
+
 ## Logging
 As mentioned above, the project offers optional logging capability.  
 Data is stored to a SD-card in .csv format. For space reasons non-floating-point values in HEX, so not really human readable or ready to easily plot.  
