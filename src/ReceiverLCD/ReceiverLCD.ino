@@ -1,7 +1,12 @@
+#define CONFIG_ESP32_WIFI_SW_COEXIST_ENABLE
+
 #include <esp_now.h>
 #include <WiFi.h>
+
 #include <SPI.h>
 #include <U8g2lib.h>
+
+#include <BleKeyboard.h>
 
 #define EN2_PIN 23
 #define EN1_PIN 22
@@ -15,8 +20,10 @@
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds, 5 = testing
-#define LCDSTATE_COUNT 6 // number of available states of the lcd (which actually display info, another one for selecting things is automatically added)
+#define LCDSTATE_COUNT 6 // number of available states of the lcd (which actually displays another one for selecting things which is automatically added)
 unsigned char selectedLine = 0; // for screens that use user selection
+
+BleKeyboard bleKeyboard("BMW KCAN media", "KUHLwasStolen", 100);
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -66,6 +73,7 @@ void setup() {
   u8g2.begin(); // initialize lcd
   u8g2.setFont(u8g2_font_6x10_mr);
 
+
   // Setup WIFI mode and print MAC address
   WiFi.mode(WIFI_MODE_STA);
   WiFi.setChannel(ESP_NOW_CHANNEL);
@@ -89,6 +97,11 @@ void setup() {
   
   Serial.print("Expecting ESP-NOW messages at a size of: ");
   Serial.println(sizeof(data));
+
+
+  Serial.println("Starting BLE media controller");
+  bleKeyboard.begin();
+
 
   showStartupLogo(2500);
 
@@ -126,7 +139,6 @@ void userInputTaskCode(void * params) {
     // Encoder button
     if(digitalRead(ENC_PIN) == 0) {
       pressed = true;
-      selectedLine = 0;
       Serial.println("Encoder button pressed");
       
       if(lcdState == 0) {
@@ -140,12 +152,30 @@ void userInputTaskCode(void * params) {
       lcdState = (lcdState + 1) % (LCDSTATE_COUNT + 1);
 
       if(lcdState == 0) {
-        if(selectedLine == 1) {
-          // Turn off lcd
-          Serial.println("Turning off LCD");
-          digitalWrite(LCD_POWER_PIN, LOW);
-        } else {
-          lcdState = 1; // go back to the first page
+        switch(selectedLine) {
+          case 0:
+            lcdState = 1;
+            break;
+          
+          case 1:
+            Serial.println("Turning off LCD");
+            digitalWrite(LCD_POWER_PIN, LOW);
+            break;
+
+          case 2:
+            lcdState = LCDSTATE_COUNT;
+            if(bleKeyboard.isConnected()) {
+              Serial.println("Sending Play/Pause media key...");
+              bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+            }
+            break;
+
+          case 3:
+            lcdState = LCDSTATE_COUNT;
+            if(bleKeyboard.isConnected()) {
+              Serial.println("Sending Play/Pause media key...");
+              bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
+            }
         }
       }
     }
@@ -154,7 +184,7 @@ void userInputTaskCode(void * params) {
     if(digitalRead(EN1_PIN) == 0) {
       pressed = true;
       Serial.println("Rotated");
-      selectedLine = (selectedLine + 1) % 2;
+      selectedLine = (selectedLine + 1) % 4;
     }
 
 
@@ -505,6 +535,8 @@ void drawSelectorScreen() {
 
     u8g2.drawStr(1, 8, "Next");
     u8g2.drawStr(1, 18, "LCD off");
+    u8g2.drawStr(1, 28, "Play/Pause");
+    u8g2.drawStr(1, 38, "Next Track");
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );

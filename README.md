@@ -79,7 +79,13 @@ Any constructive input on how to improve the schematic is greatly appreciated!
 3D-printable enclosures and accessories can be found [here](cad/exports).  
 (Yes, most slicers are able to use .step files, most people are not aware of this).  
 All of the models are in their perfect printing orientation and do not *need* supports.  
-The only place where you might need a tiny bit of support is [this](cad/exports/SenderModels/Enclosure_top.step) model, on the small, straight overhang for the screw terminal.  
+The only place where you might need a tiny bit of support is [this](cad/exports/SenderModels/Enclosure_bottom.step) model, on the small, straight overhang for the screw terminal.  
+
+## Bluetooth media controller
+The Receiver/LCD module of the project offers bluetooth capability to control media playback on your phone.  
+To be able to use this you need to have the [ESP32-BLE-Keyboard library](https://github.com/T-vK/ESP32-BLE-Keyboard/tree/master) installed.  
+But you need to modify it a bit. Go to your Arduino-IDE sketchbook directory, go to ```libraries```, go to the ```ESP32-BLE-Keyboard``` directory, find the file ```BleKeyboard.cpp``` and replace it with [this file](src/BleKeyboard.cpp).  
+You can then use the library as you would normally.  
 
 ## Logging
 As mentioned above, the project offers optional logging capability.  
@@ -144,3 +150,4 @@ Here you can find some links with useful information in relation to this project
 | My source for the Ender3 LCD pinout | https://github.com/rfblock/ender3-lcd-arduino |
 | Library used to drive LCD (can be downloaded via Arduino IDE) | https://github.com/olikraus/u8g2 |
 | Library used to drive MCP2515 module (can be downloaded via Arduino IDE) | https://github.com/Seeed-Studio/Seeed_Arduino_CAN |
+| Library used for Bluetooth support, needs modification, see according chapter above | https://github.com/T-vK/ESP32-BLE-Keyboard/tree/master |
