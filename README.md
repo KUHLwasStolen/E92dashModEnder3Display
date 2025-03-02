@@ -5,12 +5,7 @@ Additionally the project comes with an optional/modular data logger addon, to re
 
 The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
 
-<object data="logging/sampleLogs/log_3_graphs/log_3_converted_accelLong.pdf"  type="application/pdf">
-    <embed src="logging/sampleLogs/log_3_graphs/log_3_converted_accelLong.pdf">
-        <p>This browser does not support PDFs. Please download the PDF to view it</p>
-    </embed>
-</object>
-
+<img src="pictures/accelLongPlot.png" alt="plot of longitudinal acceleration"/>
 
 ## !!!Disclaimer!!!
 Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
