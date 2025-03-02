@@ -3,7 +3,14 @@ Chaotic name, simple mission.
 I have the old LCD from my Creality Ender 3 Pro, which I don't need anymore, because I'm running it headless with Klipper and I want to use it to display some additional information on the dash of my BMW E92.  
 Additionally the project comes with an optional/modular data logger addon, to record the sniffed telemetry data.  
 
-The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.    
+The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
+
+<object data="logging/sampleLogs/log_3_graphs/log_3_converted_accelLong.pdf"  type="application/pdf">
+    <embed src="logging/sampleLogs/log_3_graphs/log_3_converted_accelLong.pdf">
+        <p>This browser does not support PDFs. Please download the PDF to view it</p>
+    </embed>
+</object>
+
 
 ## !!!Disclaimer!!!
 Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
@@ -81,6 +88,8 @@ Any constructive input on how to improve the schematic is greatly appreciated!
 All of the models are in their perfect printing orientation and do not *need* supports.  
 The only place where you might need a tiny bit of support is [this](cad/exports/SenderModels/Enclosure_bottom.step) model, on the small, straight overhang for the screw terminal.  
 
+<img src="pictures/Enclosure_bottom_supports.png" alt="Enclosure_bottom support example" width="300"/>
+
 ## Logging
 As mentioned above, the project offers optional logging capability.  
 Data is stored to a SD-card in .csv format. For space reasons non-floating-point values in HEX, so not really human readable or ready to easily plot.  
@@ -96,10 +105,15 @@ g++ dataConverter.cpp -o dataConverter
 ```
 
 Then you can plot the converted data into a PDF with the python script in the same folder.  
+The x-axis will always be the time in seconds since the drive started.  
 
 *Usage:*
 ```
-python dataPlotter.py [your_log_converted.csv] [column index to plot]
+# index = 0 -> time(s), index = 1 -> clutchPressed, ...
+python dataPlotter.py [your_log_converted.csv] [column index to plot on y]
+
+# or to plot all data points and export them into separate files
+python dataPlotter.py [your_log_converted.csv] all
 ```
 
 ## Hardware

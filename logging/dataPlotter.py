@@ -13,29 +13,50 @@ Y = []
  
 with open(sys.argv[1], 'r') as datafile:
     plotting = csv.reader(datafile, delimiter=';')
-     
-    for ROWS in plotting:
-        X.append(ROWS[0])
-        Y.append(ROWS[int(sys.argv[2])])
 
-plt.title("BMW KCAN data")
+    start = 0
+    end = 0
 
-xLabel = X.pop(0)
-yLabel = Y.pop(0)
+    if sys.argv[2] == "all":
+        start = 1
+        for ROWS in plotting:
+            end = len(ROWS) - 1
+            break
+    else:
+        start = int(sys.argv[2])
+        end = start + 1 
 
-plt.xlabel(xLabel)
-plt.ylabel(yLabel)
+    for i in range(start, end):
+        datafile.seek(0)
+        X = []
+        Y = []
 
-for i in range(len(X)):
-    X[i] = float(X[i])
+        for ROWS in plotting:
+            X.append(ROWS[0])
+            Y.append(ROWS[i])
 
-for i in range(len(Y)):
-    Y[i] = float(Y[i])
+        plt.title("BMW KCAN data")
+        plt.figure().set_figwidth((len(X) * 20) / 4500)
 
-plt.plot(X,Y)
+        xLabel = X.pop(0)
+        yLabel = Y.pop(0)
 
-plotFileName = sys.argv[1].replace(".csv", "_" + yLabel + ".pdf")
+        plt.xlabel(xLabel)
+        plt.ylabel(yLabel)
 
-plt.savefig(plotFileName, bbox_inches='tight')
+        for i in range(len(X)):
+            X[i] = float(X[i])
 
-print("Plot succelfully saved at " + plotFileName)
+        for i in range(len(Y)):
+            Y[i] = float(Y[i])
+
+        plt.plot(X,Y)
+
+        plotFileName = sys.argv[1].replace(".csv", "_" + yLabel + ".pdf")
+
+        plt.savefig(plotFileName, bbox_inches='tight')
+
+        print("Plot successfully saved at " + plotFileName)
+
+        plt.clf()
+        plt.close()
