@@ -5,6 +5,8 @@ Additionally the project comes with an optional/modular data logger addon, to re
 
 The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
 
+Here is some logged sample data.  
+The x-axis represents the time in seconds from when the drive started and the y-axis is longitudinal acceleration in m/s².
 <img src="pictures/accelLongPlot.png" alt="plot of longitudinal acceleration"/>
 
 ## !!!Disclaimer!!!
@@ -41,10 +43,9 @@ From my testing during development, this approach has been very reliable and als
 | 0x0AA | Throttle position, engine RPM | **Yes** |
 | 0x0C8 | Steering wheel angle/position | **Yes** |
 | 0x0CE | Wheel speeds | **Yes** |
-| 0x1A0 | Vehicle speed, acceleration | Acceleration to be tested |
+| 0x1A0 | Vehicle speed, acceleration | **Yes** |
 | 0x1C2 | PDC (park distance control) sensors | **Yes** |
-| 0x1D0 | Engine-, oil-temperature, air pressure | air pressure, oil temperature to be tested |
-| 0x1D2 | Gear/shift related info | To be decoded properly |
+| 0x1D0 | Engine-temperature, (intake) air pressure | **Yes** |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
 | 0x330 | Range | **Yes** |
 | 0x349 | Fuel level sensors (car has two) | **Yes** |
@@ -107,7 +108,7 @@ The x-axis will always be the time in seconds since the drive started.
 # index = 0 -> time(s), index = 1 -> clutchPressed, ...
 python dataPlotter.py [your_log_converted.csv] [column index to plot on y]
 
-# or to plot all data points and export them into separate files
+# or to plot all columns and export them into separate files
 python dataPlotter.py [your_log_converted.csv] all
 ```
 
@@ -130,10 +131,12 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
+| M3x6 bolts | 0-2 | Depending on config: used to mount the trim hook |  |
 | M3x8 bolts | 4-7 | Depending on config: used for the SD card breakout board, mounting the MCP |  |
+| M3x10 bolts | 0-2 | Depending on config: used to hold SD card cover |  |
 | M3x12 bolts | 4 | Used for attaching the sender lid |  |
 | M3 hex nuts | 0-9 | Depending on config: used for the SD card breakout board, accessory mounting |  |
-| Jumper wires | 1 metric ton | will be replaced in the future by a less prototypie solution | |
+| (Jumper) wires | 1 metric ton | jumper wires for testing on a bread board |  |
 | Perf board + accessories |  | My plan for the final implementation in the car | https://www.amazon.com/Smraza-Soldering-Electronic-Compatible-Prototype/dp/B07NM68FXK/ref=sr_1_3 (I bought something similar) | 
 
 ## References
