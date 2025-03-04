@@ -25,10 +25,8 @@ typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
-  signed short oilTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
   unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
@@ -40,8 +38,8 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
-  float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), seems to also include throttle input from cruise control
+  float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
 } kcan_data;
@@ -375,7 +373,7 @@ void drawMixedDash() {
     u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0f), 5);
 
     // Steering position
-    int barWidth = round(data.steeringPosition * 64.0f);
+    int barWidth = -round(data.steeringPosition * 64.0f);
     if(barWidth >= 0) {
       u8g2.drawBox(64, 61, barWidth, 3);
     } else {
@@ -518,9 +516,6 @@ void drawTestingScreen() {
 
   u8g2.firstPage();
   do {
-    sprintf(outputStr, "GearAct: %d / 0x%X", data.gearAct, data.gearAct);
-    u8g2.drawStr(1, 8, outputStr);
-
     sprintf(outputStr, "Long: %.4f m/s*s", data.accelerationLong);
     u8g2.drawStr(1, 18, outputStr);
 
@@ -529,9 +524,6 @@ void drawTestingScreen() {
 
     sprintf(outputStr, "airPress: %d hPa", data.airPressEngine);
     u8g2.drawStr(1, 38, outputStr);
-
-    sprintf(outputStr, "oilTemp: %d C", data.oilTemp);
-    u8g2.drawStr(1, 48, outputStr);
   } while( u8g2.nextPage() );
 }
 

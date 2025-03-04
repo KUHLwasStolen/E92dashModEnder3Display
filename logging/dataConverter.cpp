@@ -3,8 +3,8 @@
 
 std::string delimiter = ";"; // using semicolon in our csv
 // to detect log version mismatch
-std::string loggedDataStr = "time(s);clutchPressed;brakePressed;steeringWheelButtons;gearAct;engineTemp;oilTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong;accelCross;";
-#define DATA_COUNT 25 // number of data points per line
+std::string loggedDataStr = "time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m/s*s);accelCross(m/s*s);enginePow(kW);";
+#define DATA_COUNT 24 // number of data points per line
 std::string readLine;
 
 int lineCount = 0;
@@ -13,7 +13,7 @@ int lineCount = 0;
 int main(int argc, char *argv[]) {
 	if(argc != 2) {
 		std::cout << "Illegal argument length!" << std::endl;
-		std::cout << "Usage: \'./dataConverter [log.csv]\'" << std::endl;
+		std::cout << "Usage: \'./dataConverter [your_log.csv]\'" << std::endl;
 		std::cout << "Example: \'./dataConverter testData.csv\'" << std::endl;
 		return 1;
 	}
@@ -26,6 +26,7 @@ int main(int argc, char *argv[]) {
 		lineCount++;
 	} else {
 		std::cout << "Invalid file passed!" << std::endl;
+		std::cout << "Your log may use an outdated version of the project." << std::endl;
 		return 1;
 	}
 
@@ -35,10 +36,12 @@ int main(int argc, char *argv[]) {
 	
 	std::ofstream WriteFile(writeFilePath);
 
+	// put column descriptors at the top
 	WriteFile << loggedDataStr << std::endl;
 
-	std::string nextItem;
-	int value;
+	std::string nextItem; // used to read in data points
+	int value; // used for HEX conversion
+
 	while(getline(ReadFile, readLine)) {
 		lineCount++;
 
@@ -50,43 +53,43 @@ int main(int argc, char *argv[]) {
 				case 0: 	// time 
 				case 1:		// clutchPresssed
 				case 2:		// brakePressed 
-				case 15:	// fuelLevel1
-				case 16:	// fuelLevel2
-				case 17:	// engineTorque
-				case 18:	// batteryVoltage
-				case 19:	// avgCons
-				case 20:	// avgSpeed
-				case 21:	// throttlePercentage
-				case 22:	// steeringPos
-				case 23:	// accelLong
-				case 24:	// accelCross
+				case 13:	// fuelLevel1
+				case 14:	// fuelLevel2
+				case 15:	// engineTorque
+				case 16:	// batteryVoltage
+				case 17:	// avgCons
+				case 18:	// avgSpeed
+				case 19:	// throttlePercentage
+				case 20:	// steeringPos
+				case 21:	// accelLong
+				case 22:	// accelCross
+				case 23:	// enginePow
 					WriteFile << nextItem << ";";
 					break;
 				
 				// ## convert HEX unsigned
 				case 3: 	// steeringWheelButtons
-				case 4:		// gearAct
-				case 11:	// speed
-				case 12:	// engineRpm
-				case 13:	// range
-				case 14:	// airPressEngine
+				case 9:		// speed
+				case 10:	// engineRpm
+				case 11:	// range
+				case 12:	// airPressEngine
 					value = stoul(nextItem, 0, 16);
 					WriteFile << value << ";";
 					break;
 
 				// ## convert HEX signed
-				case 5:		// engineTemp
-				case 6:		// oilTemp
-				case 7:		// wheel1
-				case 8:		// wheel2
-				case 9:		// wheel3
-				case 10:	// wheel4
+				case 4:		// engineTemp
+				case 5:		// wheel1
+				case 6:		// wheel2
+				case 7:		// wheel3
+				case 8:		// wheel4
 					value = stoul(nextItem, 0, 16);
-					value = value > 0xFFF ? value - 0x10000 : value; 
+					value = value >= 0x8000 ? value - 0x10000 : value;
 					WriteFile << value << ";";
 					break;
 			}
 
+			// remove the converted data point
 			readLine.erase(0, readLine.find(delimiter) + delimiter.length());
 		}
 
@@ -95,6 +98,7 @@ int main(int argc, char *argv[]) {
 
 	std::cout << "Processed " << lineCount << " lines of data (" << (lineCount - 1) * DATA_COUNT << " data points)" << std::endl;
 	std::cout << "Converted data saved at " << writeFilePath << std::endl;
+	std::cout << "You can use dataPlotter.py to plot the data." << std::endl;
 
 	return 0;
 }

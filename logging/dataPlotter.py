@@ -4,7 +4,8 @@ import sys
 
 if len(sys.argv) != 3:
     print("Illegal argument length!")
-    print("Usage: 'python dataPlotter.py [log_converted.csv] [column to plot]'")
+    print("Usage: 'python dataPlotter.py [your_log_converted.csv] [column to plot]'")
+    print("   Or: 'python dataPlotter.py [your_log_converted.csv] all")
     print("Example: 'python dataPlotter.py testData_converted.csv 18'")
     exit()
  

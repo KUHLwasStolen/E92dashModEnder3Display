@@ -18,14 +18,19 @@
 // Replace with the MAC address of your receiver! (see serial output of the receiver)
 uint8_t LCDreceiverAddress[] = {0x58, 0xBF, 0x25, 0x9D, 0xF5, 0x70};
 
+unsigned short dateYear = 0;
+unsigned char dateMonth;
+unsigned char dateDay;
+unsigned char dateHour;
+unsigned char dateMinute;
+unsigned char dateSecond;
+
 typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
   unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char gearAct; // meaning still unclear "gear actual"??
   unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
   signed short engineTemp; // in celcius
-  signed short oilTemp; // in celcius
   signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
   unsigned short speed; // in km/h (might depend on car settings)
   unsigned short engineRpm;
@@ -37,8 +42,8 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat)
-  float steeringPosition; // -1 -> fully (600°) to the left, 0 -> centered, 1 -> fully (600°) to the right
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), seems to also include throttle input from cruise control
+  float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
 } kcan_data;
@@ -211,16 +216,15 @@ void dataTaskCode(void * params) {
 
         case 0x1D0:
           setEngineTemp(buf[0]);
-          setOilTemp(buf[1]);
           setAirPressEngine(buf[3]);
-          break;
-
-        case 0x1D2:
-          setGearAct(buf[1]);
           break;
 
         case 0x1D6:
           setSteeringWheelButtons(buf[0], buf[1]);
+          break;
+
+        case 0x2F8:
+          setTimeAndDate(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
           break;
 
         case 0x330:
@@ -265,7 +269,7 @@ void loggerTaskCode(void * params) {
   File logFile;
   getLogFile(&logFile);
 
-  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;gearAct;engineTemp;oilTemp;wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine;fuelLevel1;fuelLevel2;engineTorque;batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong;accelCross;\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m/s*s);accelCross(m/s*s);enginePow(kW);\n")) {
     Serial.println("Initial write to file failed. Aborting...");
     vTaskDelete(LoggerTask);
   }
@@ -275,11 +279,15 @@ void loggerTaskCode(void * params) {
 
   Serial.print("Writing log to: ");
   Serial.println(logFile.name());
+
+  float enginePower;
   while(1) {
+    enginePower = ((float)data.engineRpm * data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
+
     // use hex where possible to save space
-    sprintf(printString, "%.2f;%X;%X;%X;%X;%hX;%hX;%hX;%hX;%hX;%hX;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons, data.gearAct,
-        data.engineTemp, data.oilTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.airPressEngine, data.fuelLevel1, data.fuelLevel2,
-        data.engineTorque, data.batteryVoltage, data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition, data.accelerationLong, data.accelerationCross);
+    sprintf(printString, "%.2f;%X;%X;%X;%hX;%hX;%hX;%hX;%hX;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons,
+        data.engineTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.airPressEngine, data.fuelLevel1, data.fuelLevel2,
+        data.engineTorque, data.batteryVoltage, data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition, data.accelerationLong, data.accelerationCross, enginePower);
     logFile.print(printString);
 
     flushCounter = (flushCounter + 1) % 20; // flush after every 20th log to not lose too much data when power is shut off, but also not overdo it
@@ -308,7 +316,8 @@ void setClutchPressed(unsigned char byte5) {
 
 // from 0x0A8
 void setBrakePressed(unsigned char byte7) {
-  data.brakePressed = byte7 > 20;
+  // last three bits are brake status
+  data.brakePressed = byte7 >> 5;
 }
 
 // from 0x0AA
@@ -323,11 +332,11 @@ void setEngineRpm(unsigned char byte4, unsigned char byte5) {
 
 // from 0x0C8
 void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
-  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 23 and the max steering angle is 600°
-  // negative means to the left and positive to the right --> value between -13800 and +13800 (-600° and 600°)
+  // value is in 2s compliment (can be negative), to get the angle in degrees devide by 22.75 and the max steering angle is 600°
+  // negative means to the right and positive to the left --> value between -13650 and +13650 (-600° and 600°)
   signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
 
-  data.steeringPosition = (float)combined / 13800.0f;
+  data.steeringPosition = (float)combined / 13650.0f;
 }
 
 // from 0x0CE
@@ -345,7 +354,7 @@ void setSpeed(unsigned char byte0, unsigned char byte1) {
 // from 0x1A0
 void setAcceleration(unsigned char byte2, unsigned char byte3, unsigned char byte4) {
   data.accelerationLong = (((signed short)((signed char)(byte3 << 4)) << 4) + (signed short)byte2) / 40.0f;
-  data.accelerationCross = (((signed short)byte4 << 4) + ((signed short)byte3 >> 4)) / 40.0f;
+  data.accelerationCross = ((((signed short)(signed char)byte4) << 4) + (((signed short)byte3) >> 4)) / 40.0f;
 }
 
 // from 0x1C2
@@ -361,18 +370,8 @@ void setEngineTemp(unsigned char byte0) {
 }
 
 // from 0x1D0
-void setOilTemp(unsigned char byte1) {
-  data.oilTemp = (signed short)byte1 - 48;
-}
-
-// from 0x1D0
 void setAirPressEngine(unsigned char byte3) {
   data.airPressEngine = (((unsigned short)byte3) * 2) + 598;
-}
-
-// from 0x1D2
-void setGearAct(unsigned char byte1) {
-  data.gearAct = (unsigned char)(byte1 >> 4); // shift out first 4 bits
 }
 
 // from 0x1D6
@@ -414,6 +413,16 @@ void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
   }
 
   data.steeringWheelButtons = tempButtons;
+}
+
+// from 0x2F8
+void setTimeAndDate(unsigned char byte0, unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4, unsigned char byte5, unsigned char byte6) {
+  dateYear = ((unsigned short)byte6 << 8) + (unsigned short)byte5;
+  dateMonth = byte4 >> 4;
+  dateDay = byte3;
+  dateSecond = byte2;
+  dateMinute = byte1;
+  dateHour = byte0;
 }
 
 // from 0x330
@@ -466,17 +475,16 @@ void getLogFile(File* outputFile) {
     vTaskDelete(LoggerTask);
   }
 
-  unsigned int fileCounter = 0;
-  File logFile = logRoot.openNextFile();
-  while (logFile) {
-    fileCounter++;
-    logFile = logRoot.openNextFile();
+  while(dateYear == 0) {
+    Serial.println("Waiting with log for time/date information...");
+    delay(250);
   }
+  delay(25); // Wait a bit for all time/date data to be converted/saved
 
-  char printString[64];
+  char fileName[64];
 
-  sprintf(printString, "/BMW_KCAN_telemetryLog/log_%d.csv", fileCounter);
-  logFile = SD.open(printString, FILE_WRITE);
+  sprintf(fileName, "/BMW_KCAN_telemetryLog/log_%d_%d_%d_%d_%d_%d.csv", dateYear, dateMonth, dateDay, dateHour, dateMinute, dateSecond);
+  File logFile = SD.open(fileName, FILE_WRITE);
   if(!logFile) {
     Serial.println("Could not open log file for writing. Aborting...");
     vTaskDelete(LoggerTask);
