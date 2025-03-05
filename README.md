@@ -5,9 +5,15 @@ Additionally the project comes with an optional/modular data logger addon, to re
 
 The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
 
+This is the sender/logging module mounted in the trunk of my E92.  
+<img src="pictures/SenderInstalledTrimHanger.jpg" alt="picture of the installed sender module" width="350"/>  
+It's responsible for sniffing the CAN-messages and converting them into numbers.  
+The data is then sent via ESP-NOW to a receiver unit with the LCD.  
+The sender module is also responsible for logging the data if wished.  
+
 Here is some logged sample data.  
 The x-axis represents the time in seconds from when the drive started and the y-axis is longitudinal acceleration in m/s².
-<img src="pictures/accelLongPlot.png" alt="plot of longitudinal acceleration"/>
+<img src="pictures/accelLongPlot.png" alt="plot of longitudinal acceleration"/>  
 
 ## !!!Disclaimer!!!
 Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
@@ -47,6 +53,7 @@ From my testing during development, this approach has been very reliable and als
 | 0x1C2 | PDC (park distance control) sensors | **Yes** |
 | 0x1D0 | Engine-temperature, (intake) air pressure | **Yes** |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
+| 0x2F8 | Time and date information | **Yes** |
 | 0x330 | Range | **Yes** |
 | 0x349 | Fuel level sensors (car has two) | **Yes** |
 | 0x362 | Average fuel consumption, avg. speed | **Yes** |
@@ -105,7 +112,7 @@ The x-axis will always be the time in seconds since the drive started.
 
 *Usage:*
 ```
-# index = 0 -> time(s), index = 1 -> clutchPressed, ...
+# index: 0 -> time(s), 1 -> clutchPressed, 2-> brakePressed, ...
 python dataPlotter.py [your_log_converted.csv] [column index to plot on y]
 
 # or to plot all columns and export them into separate files
@@ -131,7 +138,7 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
-| M3x6 bolts | 0-2 | Depending on config: used to mount the trim hook |  |
+| M3x6 bolts | 0-4 | Depending on config: used to mount the trim hook, SD card cover on the bottom |  |
 | M3x8 bolts | 4-7 | Depending on config: used for the SD card breakout board, mounting the MCP |  |
 | M3x10 bolts | 0-2 | Depending on config: used to hold SD card cover |  |
 | M3x12 bolts | 4 | Used for attaching the sender lid |  |

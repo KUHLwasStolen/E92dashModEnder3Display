@@ -3,7 +3,7 @@
 
 std::string delimiter = ";"; // using semicolon in our csv
 // to detect log version mismatch
-std::string loggedDataStr = "time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m/s*s);accelCross(m/s*s);enginePow(kW);";
+std::string loggedDataStr = "time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_s*s);accelCross(m_s*s);enginePow(kW);";
 #define DATA_COUNT 24 // number of data points per line
 std::string readLine;
 
@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
 	if(argc != 2) {
 		std::cout << "Illegal argument length!" << std::endl;
 		std::cout << "Usage: \'./dataConverter [your_log.csv]\'" << std::endl;
-		std::cout << "Example: \'./dataConverter testData.csv\'" << std::endl;
+		std::cout << "Example: \'./dataConverter log_2025_03_04_15h_52m_27s.csv\'" << std::endl;
 		return 1;
 	}
 
@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
 	} else {
 		std::cout << "Invalid file passed!" << std::endl;
 		std::cout << "Your log may use an outdated version of the project." << std::endl;
+		std::cout << "Check that the first line of the log matches the following:" << std::endl << loggedDataStr << std::endl;
 		return 1;
 	}
 

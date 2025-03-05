@@ -269,7 +269,7 @@ void loggerTaskCode(void * params) {
   File logFile;
   getLogFile(&logFile);
 
-  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressEngine(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m/s*s);accelCross(m/s*s);enginePow(kW);\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_s*s);accelCross(m_s*s);enginePow(kW);\n")) {
     Serial.println("Initial write to file failed. Aborting...");
     vTaskDelete(LoggerTask);
   }
@@ -295,7 +295,7 @@ void loggerTaskCode(void * params) {
       logFile.flush();
     }
 
-    delay(250); // better would be a precise timer but this is fine for now
+    delay(250); // better would be to use a precise timer but this is fine for now
   }
 }
 
@@ -483,7 +483,8 @@ void getLogFile(File* outputFile) {
 
   char fileName[64];
 
-  sprintf(fileName, "/BMW_KCAN_telemetryLog/log_%d_%d_%d_%d_%d_%d.csv", dateYear, dateMonth, dateDay, dateHour, dateMinute, dateSecond);
+  // creates file names of the format log_YEAR_MONTH_DAY_hour_minute_second.csv
+  sprintf(fileName, "/BMW_KCAN_telemetryLog/log_%04d_%02d_%02d_%02dh_%02dm_%02ds.csv", dateYear, dateMonth, dateDay, dateHour, dateMinute, dateSecond);
   File logFile = SD.open(fileName, FILE_WRITE);
   if(!logFile) {
     Serial.println("Could not open log file for writing. Aborting...");
