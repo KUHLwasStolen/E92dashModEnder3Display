@@ -14,8 +14,8 @@
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds, 5 = testing
-#define LCDSTATE_COUNT 6 // number of available states of the lcd (of which actually display info, another one is added automatically, for selecting things)
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds
+#define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
 unsigned char selectedLine = 0; // for screens that use user selection
 
 TaskHandle_t RenderingTask;
@@ -235,11 +235,6 @@ void updateDisplay() {
       drawSpeeds();
     break;
 
-    // temporary page for decoding stuff
-    case 5:
-      drawTestingScreen();
-    break;
-
     case LCDSTATE_COUNT:
       drawSelectorScreen();
     break;
@@ -300,7 +295,7 @@ void getPDCstr(char* pdcStr, unsigned char index, bool displayedLeft) {
 }
 
 void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
-  sprintf(speedStr, displayedLeft ? "%d km/h" : "%3d km/h", index < 4 ? data.wheelSpeeds[index] : data.speed);
+  sprintf(speedStr, displayedLeft ? "%d" : "%3d", index < 4 ? data.wheelSpeeds[index] : data.speed);
 }
 
 
@@ -474,24 +469,43 @@ void drawPDCsensors() {
 
 // displays wheel speeds and overall speed
 void drawSpeeds() {
-  char outputStr[11];
+  char outputStr[6];
+
+  // 1 g translates to 25 pixels
+  int xOffset = (int)round((data.accelerationCross / 9.81f) * 25.0f);
+  int yOffset = (int)round((data.accelerationLong / 9.81f) * 25.0f);
 
   u8g2.firstPage();
   do {
+    u8g2.setDrawColor(2); // XOR mode
+
     getSpeedStr(outputStr, 0, true); // front-L
-    u8g2.drawStr(1, 8, "100 km/h");
+    u8g2.drawStr(1, 8, outputStr);
+    u8g2.drawStr(1, 18, "km/h");
 
     getSpeedStr(outputStr, 1, false); // front-R
-    u8g2.drawStr(80, 8, "100 km/h");
+    u8g2.drawStr(110, 8, outputStr);
+    u8g2.drawStr(104, 18, "km/h");
 
     getSpeedStr(outputStr, 2, true); // rear-L
-    u8g2.drawStr(1, 63, "100 km/h");
+    u8g2.drawStr(1, 53, outputStr);
+    u8g2.drawStr(1, 63, "km/h");
 
     getSpeedStr(outputStr, 3, false); // rear-R
-    u8g2.drawStr(80, 63, "100 km/h");
+    u8g2.drawStr(110, 53, outputStr);
+    u8g2.drawStr(104, 63, "km/h");
 
-    getSpeedStr(outputStr, 4, false); // overall
-    u8g2.drawStr(41, 34, "100 km/h");
+    // g-force square
+    u8g2.drawLine(37, 31, 63, 5);
+    u8g2.drawLine(64, 5, 90, 31);
+    u8g2.drawLine(64, 58, 90, 32);
+    u8g2.drawLine(37, 32, 63, 58);
+    u8g2.drawStr(94, 35, "1g"); // "axis label"
+
+    // g-force indicator, center position: 61, 29
+    u8g2.drawBox(61 + xOffset, 29 + yOffset, 6, 6);
+
+    u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );
 }
 
@@ -507,23 +521,6 @@ void drawSelectorScreen() {
     u8g2.drawStr(1, 18, "LCD off");
 
     u8g2.setDrawColor(1); // normal mode
-  } while( u8g2.nextPage() );
-}
-
-// for testing stuff
-void drawTestingScreen() {
-  char outputStr[22];
-
-  u8g2.firstPage();
-  do {
-    sprintf(outputStr, "Long: %.4f m/s*s", data.accelerationLong);
-    u8g2.drawStr(1, 18, outputStr);
-
-    sprintf(outputStr, "Cross: %.4f m/s*s", data.accelerationCross);
-    u8g2.drawStr(1, 28, outputStr);
-
-    sprintf(outputStr, "airPress: %d hPa", data.airPressEngine);
-    u8g2.drawStr(1, 38, outputStr);
   } while( u8g2.nextPage() );
 }
 
