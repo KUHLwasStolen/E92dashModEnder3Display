@@ -471,9 +471,9 @@ void drawPDCsensors() {
 void drawSpeeds() {
   char outputStr[6];
 
-  // 1 g translates to 25 pixels
-  int xOffset = (int)round((data.accelerationCross / 9.81f) * 25.0f);
-  int yOffset = (int)round((data.accelerationLong / 9.81f) * 25.0f);
+  // 1 g translates to 40 pixels
+  int xOffset = (int)round((data.accelerationCross / 9.81f) * 40.0f);
+  int yOffset = (int)round((data.accelerationLong / 9.81f) * 40.0f);
 
   u8g2.firstPage();
   do {
@@ -496,11 +496,17 @@ void drawSpeeds() {
     u8g2.drawStr(104, 63, "km/h");
 
     // g-force square
-    u8g2.drawLine(37, 31, 63, 5);
-    u8g2.drawLine(64, 5, 90, 31);
-    u8g2.drawLine(64, 58, 90, 32);
-    u8g2.drawLine(37, 32, 63, 58);
-    u8g2.drawStr(94, 35, "1g"); // "axis label"
+    //  inner "0.5 g"
+    u8g2.drawLine(42, 31, 63, 10);
+    u8g2.drawLine(64, 10, 85, 31);
+    u8g2.drawLine(64, 53, 85, 32);
+    u8g2.drawLine(42, 32, 63, 53);
+    //  outer "1 g"
+    u8g2.drawLine(64, 73, 105, 32);
+    u8g2.drawLine(64, -10, 105, 31);
+    u8g2.drawLine(22, 31, 63, -10);
+    u8g2.drawLine(22, 32, 63, 73);
+    u8g2.drawStr(108, 35, "1g"); // "axis label"
 
     // g-force indicator, center position: 61, 29
     u8g2.drawBox(61 + xOffset, 29 + yOffset, 6, 6);
