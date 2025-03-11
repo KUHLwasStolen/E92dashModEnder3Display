@@ -269,7 +269,7 @@ void loggerTaskCode(void * params) {
   File logFile;
   getLogFile(&logFile);
 
-  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_s*s);accelCross(m_s*s);enginePow(kW);\n")) {
+  if(!logFile.print("time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_sq(s));accelCross(m_sq(s));enginePow(kW);\n")) {
     Serial.println("Initial write to file failed. Aborting...");
     vTaskDelete(LoggerTask);
   }

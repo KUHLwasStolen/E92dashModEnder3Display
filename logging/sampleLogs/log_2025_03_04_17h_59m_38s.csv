@@ -1,4 +1,4 @@
-time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_s*s);accelCross(m_s*s);enginePow(kW);
+time(s);clutchPressed;brakePressed;steeringWheelButtons;engineTemp(C);wheel1;wheel2;wheel3;wheel4;speed;engineRpm;range;airPressIntake(hPa);fuelLevel1;fuelLevel2;engineTorque(Nm);batteryVoltage;avgCons;avgSpeed;throttlePercent;steeringPos;accelLong(m_sq(s));accelCross(m_sq(s));enginePow(kW);
 2.49;0;0;0;3F;0;0;0;0;0;0;144;3C2;3.2;19.5;187.0;12.3;0.0;0.0;0.0000;0.0233;0.0000;-0.8500;0.0000;
 2.74;0;0;0;3F;0;0;0;0;0;0;144;3C2;3.2;19.5;187.0;12.3;0.0;0.0;0.0000;0.0233;0.0000;-0.8750;0.0000;
 2.99;0;0;0;3F;0;0;0;0;0;0;144;3C2;3.2;19.5;187.0;12.3;0.0;0.0;0.0000;0.0233;0.0000;-0.8750;0.0000;
