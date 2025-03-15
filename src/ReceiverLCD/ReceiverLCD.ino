@@ -2,21 +2,31 @@
 #include <WiFi.h>
 #include <SPI.h>
 #include <U8g2lib.h>
+#include <Adafruit_NeoPixel.h>
 
 #define EN2_PIN 23
 #define EN1_PIN 22
 #define ENC_PIN 21
+
 #define LCD_POWER_PIN 13
 #define LCD_CS_PIN 15
 #define LCD_SCK_PIN 14
 #define LCD_MOSI_PIN 27
 
-#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the sender code!
+#define LED_RING_PIN 26
+#define PIXEL_COUNT 8
+
+#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, !!!also change it in the sender code!!!
+
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
 unsigned char selectedLine = 0; // for screens that use user selection
+
+Adafruit_NeoPixel ledRing(PIXEL_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
+const uint32_t standardColor = ledRing.Color(0x8A, 0x0E, 0x03);
+
 
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
@@ -61,8 +71,10 @@ void setup() {
 
   digitalWrite(LCD_POWER_PIN, HIGH); // turn on lcd
   
+
   u8g2.begin(); // initialize lcd
   u8g2.setFont(u8g2_font_6x10_mr);
+
 
   // Setup WIFI mode and print MAC address
   WiFi.mode(WIFI_MODE_STA);
@@ -88,7 +100,22 @@ void setup() {
   Serial.print("Expecting ESP-NOW messages at a size of: ");
   Serial.println(sizeof(data));
 
-  showStartupLogo(2500);
+  ledRing.begin();
+  ledRing.clear();
+
+  showStartupLogo(500);
+
+  for(int i = 0; i < 2 * PIXEL_COUNT; i++) {
+    ledRing.clear();
+    ledRing.setPixelColor(i % PIXEL_COUNT, standardColor);
+    ledRing.setBrightness(75);
+    ledRing.show();
+
+    delay(125);
+  }
+  ledRing.fill(standardColor, 0, PIXEL_COUNT);
+  ledRing.setBrightness(50);
+  ledRing.show();
 
   xTaskCreatePinnedToCore(
                     renderingTaskCode,    // Task function
@@ -151,7 +178,7 @@ void userInputTaskCode(void * params) {
     }
 
     // Encoder rotate (no direction only rotate)
-    if(digitalRead(EN1_PIN) == 0) {
+    if(digitalRead(EN1_PIN) == 0 || digitalRead(EN2_PIN) == 0) {
       pressed = true;
       Serial.println("Rotated");
       selectedLine = (selectedLine + 1) % 2;
@@ -242,7 +269,7 @@ void updateDisplay() {
 }
 
 
-// ### Rendering helper methods ###
+// ### Display rendering helper functions ###
 void getEngineTempStr(char* tempStr) {
   sprintf(tempStr, "%+d C", data.engineTemp);
 }
@@ -299,7 +326,7 @@ void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
 }
 
 
-// ### Logic helper methods ###
+// ### Logic helper functions ###
 //  ## Convert steeringWheelButtons into bools
 bool volumeUpPressed() {
   return data.steeringWheelButtons % 2;
@@ -334,7 +361,7 @@ bool diskPressed() {
 }
 
 
-// ### General visual helper methods
+// ### LCD screen functions
 // displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition
 void drawMixedDash() {
   char outputStr[12];
@@ -503,8 +530,8 @@ void drawSpeeds() {
     u8g2.drawLine(42, 32, 63, 53);
     //  outer "1 g"
     u8g2.drawLine(64, 73, 105, 32);
-    u8g2.drawLine(64, -10, 105, 31);
-    u8g2.drawLine(22, 31, 63, -10);
+    u8g2.drawLine(74, 0, 105, 31);
+    u8g2.drawLine(22, 31, 53, 0);
     u8g2.drawLine(22, 32, 63, 73);
     u8g2.drawStr(108, 35, "1g"); // "axis label"
 

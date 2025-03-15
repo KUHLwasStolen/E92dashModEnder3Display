@@ -127,6 +127,7 @@ void setup() {
   hspi.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS); // use other SPI bus for the SD card to not interrupt the MCP
   hspi.setFrequency(HSPI_FRQ);
   pinMode(SD_CS, OUTPUT);
+
   if(!SD.begin(SD_CS, hspi, HSPI_FRQ) || SD.cardType() == CARD_NONE) {
     Serial.println("SD card module not connected or no card inserted");
   } else {
@@ -300,7 +301,7 @@ void loggerTaskCode(void * params) {
 }
 
 
-// ### CAN conversion methods ordered by ID ###
+// ### CAN conversion functions ordered by ID ###
 // from 0x0A8
 void setEngineTorque(unsigned char byte1, unsigned char byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"

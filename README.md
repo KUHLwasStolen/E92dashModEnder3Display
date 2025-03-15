@@ -134,17 +134,19 @@ I am in no way affiliated with the linked sellers and can in no way guarantee th
 | Ender 3 (Pro) LCD | 1 | also an odd choice but, again, I already had one from my 3D printer; I will not leave a link where to buy one as this doesn't make much sense, it would be easier/cheaper to just implement support for other types of displays, which is also planned for the future! | |
 | (SD card module) | (1) | OPTIONAL: this is an optional feature to log the collected telemetry, this can also be added later and doesn't need a code update | https://www.velleman.eu/products/view/sd-card-logging-shield-for-arduino-2-pcs-vma304/?id=435522&lang=en (I have exactly these, didn't buy them there though) |
 | (SD card) | (1) | if you want to use the optional data logger you will need an SD card |  |
+| (WS2812 LED ring 8 pixels) | (1) | OPTIONAL: used to light up the encoder knob on the LCD and play animations | https://www.az-delivery.de/en/products/led-ring-ws2812-5050-rgb?variant=44246024978699 |
 | 10k Ohm resistor | 3 | used as pullups, similar values may also work |  |
 | 560 Ohm resistor | 2 | used for the transistors, similar values may also work |  |
+| (330 Ohm resistor) | 1 | used for the optional LED ring, similar values also work |  |
 | BC547 transistor | 1 | used to switch LCD on/off, can be replaced by a similar NPN |  |
 | S8550 transistor | 1 | used to switch LCD on/off, can be replaced by a similar PNP |  |
 | M3x6 bolts | 0-4 | Depending on config: used to mount the trim hook, SD card cover on the bottom |  |
 | M3x8 bolts | 4-7 | Depending on config: used for the SD card breakout board, mounting the MCP |  |
 | M3x10 bolts | 0-2 | Depending on config: used to hold SD card cover |  |
-| M3x12 bolts | 4 | Used for attaching the sender lid |  |
+| M3x12 bolts | 4-5 | Used for attaching the sender lid and the optional LED ring cover/holder |  |
 | M3 hex nuts | 0-9 | Depending on config: used for the SD card breakout board, accessory mounting |  |
 | (Jumper) wires | 1 metric ton | jumper wires for testing on a bread board |  |
-| Perf board + accessories |  | My plan for the final implementation in the car | https://www.amazon.com/Smraza-Soldering-Electronic-Compatible-Prototype/dp/B07NM68FXK/ref=sr_1_3 (I bought something similar) | 
+| Perf board + accessories |  | for the final implementation in the enclosures in the car | https://www.amazon.com/Smraza-Soldering-Electronic-Compatible-Prototype/dp/B07NM68FXK/ref=sr_1_3 (I bought something similar) | 
 
 ## References
 Here you can find some links with useful information in relation to this project.  
@@ -163,3 +165,4 @@ Here you can find some links with useful information in relation to this project
 | My source for the Ender3 LCD pinout | https://github.com/rfblock/ender3-lcd-arduino |
 | Library used to drive LCD (can be downloaded via Arduino IDE) | https://github.com/olikraus/u8g2 |
 | Library used to drive MCP2515 module (can be downloaded via Arduino IDE) | https://github.com/Seeed-Studio/Seeed_Arduino_CAN |
+| Library used to drive the LED ring (can be downloaded via Arduino IDE) | https://github.com/adafruit/Adafruit_NeoPixel |
