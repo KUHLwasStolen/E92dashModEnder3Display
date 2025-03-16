@@ -22,10 +22,13 @@
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
+#define MAX_LINES 3 // max number of selectable line
 unsigned char selectedLine = 0; // for screens that use user selection
 
 Adafruit_NeoPixel ledRing(PIXEL_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
-const uint32_t standardColor = ledRing.Color(0x8A, 0x0E, 0x03);
+const uint32_t standardColor = ledRing.Color(0x7E, 0x0E, 0x10);
+unsigned char ledRingState = 1; // 0 = off, 1 = static standard color
+#define LEDSTATE_COUNT 2
 
 
 TaskHandle_t RenderingTask;
@@ -103,15 +106,16 @@ void setup() {
   ledRing.begin();
   ledRing.clear();
 
-  showStartupLogo(500);
+  // display BMW logo and 1 ms later start ledRing animation
+  showStartupLogo(1);
 
-  for(int i = 0; i < 2 * PIXEL_COUNT; i++) {
+  for(int i = 0; i < 3 * PIXEL_COUNT; i++) {
     ledRing.clear();
     ledRing.setPixelColor(i % PIXEL_COUNT, standardColor);
     ledRing.setBrightness(75);
     ledRing.show();
 
-    delay(125);
+    delay(83);
   }
   ledRing.fill(standardColor, 0, PIXEL_COUNT);
   ledRing.setBrightness(50);
@@ -167,12 +171,18 @@ void userInputTaskCode(void * params) {
         switch(selectedLine) {
           case 0:
             lcdState = 1; // go back to the first page
-            break;
+          break;
 
           case 1:
             Serial.println("Turning off LCD");
             digitalWrite(LCD_POWER_PIN, LOW);
-            break;
+          break;
+
+          case 2:
+            lcdState = LCDSTATE_COUNT;
+            Serial.println("Switching LED ring state");
+            ledRingState = (ledRingState + 1) % LEDSTATE_COUNT;
+          break;
         }
       }
     }
@@ -181,7 +191,7 @@ void userInputTaskCode(void * params) {
     if(digitalRead(EN1_PIN) == 0 || digitalRead(EN2_PIN) == 0) {
       pressed = true;
       Serial.println("Rotated");
-      selectedLine = (selectedLine + 1) % 2;
+      selectedLine = (selectedLine + 1) % MAX_LINES;
     }
 
 
@@ -231,6 +241,7 @@ void renderingTaskCode(void * params) {
 
   while(1) {
     updateDisplay();
+    updateLedRing();
     delay(60); // ~16 refreshes/s
   }
 }
@@ -241,31 +252,45 @@ void updateDisplay() {
   switch(lcdState) {
     // lcd off case
     case 0: break;
-
-    // displays engineTemp, enginePower, engineTorque, batteryVoltage, clutchPressed, brakePressed, throttlePercentage, steeringPosition 
+ 
     case 1:
       drawMixedDash();
     break;
     
-    // displays fuel levels
     case 2:
+      drawSpeeds();
+    break;
+
+    case 3:
       drawFuelInfo();
     break;
 
-    // displays PDC sensor distances
-    case 3:
-      drawPDCsensors();
-    break;
-
-    // displays wheel speeds and overall speed
     case 4:
-      drawSpeeds();
+      drawPDCsensors();
     break;
 
     case LCDSTATE_COUNT:
       drawSelectorScreen();
     break;
   }
+}
+
+// updated the LED ring according to current wish
+void updateLedRing() {
+  switch(ledRingState) {
+    // ring off
+    case 0:
+      ledRing.setBrightness(0);
+    break;
+
+    // static standard color
+    case 1:
+      ledRing.fill(standardColor, 0, PIXEL_COUNT);
+      ledRing.setBrightness(50);
+    break;
+  }
+
+  ledRing.show(); // update changes
 }
 
 
@@ -323,6 +348,18 @@ void getPDCstr(char* pdcStr, unsigned char index, bool displayedLeft) {
 
 void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
   sprintf(speedStr, displayedLeft ? "%d" : "%3d", index < 4 ? data.wheelSpeeds[index] : data.speed);
+}
+
+void getLedRingStateStr(char* stateStr) {
+  switch(ledRingState) {
+    case 0:
+      sprintf(stateStr, "   off");
+    break;
+
+    case 1:
+      sprintf(stateStr, "static");
+    break;
+  }
 }
 
 
@@ -544,6 +581,8 @@ void drawSpeeds() {
 
 // always the last page
 void drawSelectorScreen() {
+  char outputStr[8];
+
   u8g2.firstPage();
   do {
     u8g2.setDrawColor(2); // XOR mode
@@ -552,6 +591,10 @@ void drawSelectorScreen() {
 
     u8g2.drawStr(1, 8, "Next");
     u8g2.drawStr(1, 18, "LCD off");
+
+    u8g2.drawStr(1, 28, "LED ring");
+    getLedRingStateStr(outputStr);
+    u8g2.drawStr(92, 28, outputStr);
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );
