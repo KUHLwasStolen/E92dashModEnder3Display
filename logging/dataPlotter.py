@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import csv
 import sys
 
@@ -11,40 +12,48 @@ if len(sys.argv) != 3:
  
 X = []
 Y = []
- 
+
+# open passed file
 with open(sys.argv[1], 'r') as datafile:
+    # separate data points
     plotting = csv.reader(datafile, delimiter=';')
 
     start = 0
     end = 0
 
+    # if user wants to plot all graphs then get how many there are
     if sys.argv[2] == "all":
         start = 1
         for ROWS in plotting:
             end = len(ROWS) - 1
             break
+    # else just plot the one graph that was specified
     else:
         start = int(sys.argv[2])
         end = start + 1 
 
     for i in range(start, end):
-        datafile.seek(0)
+        datafile.seek(0) # return to the beginning of the file
+        # clear X, Y
         X = []
         Y = []
 
         for ROWS in plotting:
-            X.append(ROWS[0])
-            Y.append(ROWS[i])
+            X.append(ROWS[0]) # always time as x-axis
+            Y.append(ROWS[i]) # column to plot
 
         plt.title("BMW KCAN data")
-        plt.figure().set_figwidth((len(X) * 20) / 4500)
+        # set plot size depending on how many values there are to plot
+        plt.figure().set_figwidth((len(X) * 25) / 4500)
 
+        # get labels from first line in the file
         xLabel = X.pop(0)
         yLabel = Y.pop(0)
 
         plt.xlabel(xLabel)
         plt.ylabel(yLabel)
 
+        # convert the data to floats, so it is not plotted as strings
         for i in range(len(X)):
             X[i] = float(X[i])
 
@@ -52,6 +61,22 @@ with open(sys.argv[1], 'r') as datafile:
             Y[i] = float(Y[i])
 
         plt.plot(X,Y)
+
+        # get and annotate min/max value, expcept for cases where it makes no sense
+        if yLabel != "brakePressed" and yLabel != "clutchPressed" and  yLabel != "steeringWheelButtons":
+            maxIndex = np.argmax(Y)
+            xMax = X[maxIndex]
+            yMax = Y[maxIndex]
+
+            minIndex = np.argmin(Y)
+            xMin = X[minIndex]
+            yMin = Y[minIndex]
+
+            minMaxDiff = yMax - yMin
+
+            plt.annotate(f"X: {xMax}  Y: {yMax}", xy = (xMax, yMax), arrowprops = dict(facecolor = "red"), xytext = (xMax, yMax + (0.25 * minMaxDiff)))
+
+            plt.annotate(f"X: {xMin}  Y: {yMin}", xy = (xMin, yMin), arrowprops = dict(facecolor = "blue"), xytext = (xMin, yMin - (0.25 * minMaxDiff)))
 
         plotFileName = sys.argv[1].replace(".csv", "_" + yLabel + ".pdf")
 
