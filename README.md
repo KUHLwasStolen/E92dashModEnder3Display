@@ -14,6 +14,13 @@ The sender module is also responsible for logging the data if wished.
 Here is some logged sample data.  
 The x-axis represents the time in seconds from when the drive started and the y-axis is longitudinal acceleration in m/s².
 <img src="pictures/accelLongPlot.png" alt="plot of longitudinal acceleration"/>  
+*(newer plots will automatically mark min/max values, see below)*
+
+And this is a small part of an engine-power plot in kW.  
+<img src="pictures/enginePowPlot.png" alt="plot of engine power data"/>  
+Notice the annotated minimum and maximum values.  
+The data plotter program will automatically do this for you and will also automatically not do this for plots where a min/max value makes no sense.  
+Also notice how the minimum value is negative. This is not an error and means that the engine is slowing down the car which typically happens when you are in gear and no throttle is applied.  
 
 ## !!!Disclaimer!!!
 Modifying the electrical system of your car can be **dangerous** and may void your warranty!  
@@ -21,6 +28,23 @@ Dangerous not only for your car, but also for your health!
 Before attempting any of the described modifications in this repository, **fully** read and **fully** understand everything in this README.  
 I do **not** take responsibility for any type of damages, that may occur as a result of the modifications shown here.  
 Do this at your own risk.
+
+## Additions to the ecosystem  
+My plan is to eventually extend this system with more devices in the car.  
+Once these projects are started I will link them here
+Planned:  
+- Wireless "scroll wheel"
+    - *BMW iDrive*-inspired controller for the LCD
+    - uses a magnetic encoder to replace the low-quality one on the LCD
+    - (?dedicated media buttons?)
+- Bluetooth audio adapter
+    - Bluetooth to AUX media player
+    - optionally integrates into the system to be controlled by other devices and even the car (through the other devices/detected buttons presses/...)
+    - (will most-likely require the "scroll wheel" for integration into the system as we cannot use Bluetooth and ESP-NOW at the same time)
+- Lap timer
+    - standalone lap timer using GPS
+    - can record tracks, provide real-time time-delta, etc.
+    - integration into system possible
 
 ## Plan
 The plan is to tap into the CAN-bus somewhere on the vehicle to gather interesting information.  
@@ -30,16 +54,13 @@ The speed of the bus is 100 kbit/s and it can be recognized by its twisted pair 
 On my vehicle the easiest place to tap into KCAN seems to be by the rear PDC (park distance control) module.  
 This module might not be installed on your car.  
 Alternatives include the iDrive and ultrasonic overhead alarm sensor, which are both not installed nor pre-wired on my car.  
-The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car... (see below)  
-But at least for testing it seems to be the most promising and safest location to me.  
-Again, this may vary depending on the options installed in your car.  
+The only problem with the PDC is that it is mounted in the trunk of the car and I want the information on the dash of my car...  
 
-**Update:** To solve the problem with the ESP in the trunk and display in the front, I have come to the conclusion that it is probably best to deviate from the originally planned all-in-one solution.  
-I am now sure that I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
+To solve this problem I want to have an ESP32 in the trunk of the car attached to the KCAN to collect data.  
 Then I want another ESP32 with the LCD on the dash of the car.  
 Communication between them is handled via ESP-NOW.  
-This solution avoids having to run long wires through the car or having to tap into the KCAN in places where I'm not comfortable.  
-Another advantage is that this allows us to expand the network of devices in the car pretty easily.  
+This solution avoids having to run long wires through the car and enables us to mount the CAN-sniffer in the best place in each individual car.  
+Another advantage is that this allows us to expand the network of devices in the car pretty easily, as we just have to add another receiver which can then handle the data as wished.  
 From my testing during development, this approach has been very reliable and also responsive. I have also found similar projects using ESP-NOW, which seems to support my findings.  
 
 #### Relevant information from KCAN
