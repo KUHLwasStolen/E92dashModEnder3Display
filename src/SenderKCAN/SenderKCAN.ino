@@ -42,7 +42,7 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), seems to also include throttle input from cruise control
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), also includes throttle input from cruise control
   float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
@@ -191,59 +191,59 @@ void dataTaskCode(void * params) {
           setEngineTorque(buf[1], buf[2]);
           setClutchPressed(buf[5]);
           setBrakePressed(buf[7]);
-          break;
+        break;
 
         case 0xAA:
           setThrottlePercentage(buf[3]);
           setEngineRpm(buf[4], buf[5]);
-          break;
+        break;
 
         case 0xC8:
           setSteeringPosition(buf[0], buf[1]);
-          break;
+        break;
 
         case 0xCE:
           setWheelSpeeds(buf, len);
-          break;
+        break;
 
         case 0x1A0:
           setSpeed(buf[0], buf[1]);
           setAcceleration(buf[2], buf[3], buf[4]);
-          break;
+        break;
 
         case 0x1C2:
           setPDCsensors(buf, len);
-          break;
+        break;
 
         case 0x1D0:
           setEngineTemp(buf[0]);
           setAirPressEngine(buf[3]);
-          break;
+        break;
 
         case 0x1D6:
           setSteeringWheelButtons(buf[0], buf[1]);
-          break;
+        break;
 
         case 0x2F8:
           setTimeAndDate(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
-          break;
+        break;
 
         case 0x330:
           setRange(buf[6], buf[7]);
-          break;
+        break;
 
         case 0x349:
           setFuelLevels(buf[0], buf[1], buf[2], buf[3]);
-          break;
+        break;
 
         case 0x362:
           setAvgConsumption(buf[1], buf[2]);
           setAvgSpeed(buf[0], buf[1]);
-          break;
+        break;
 
         case 0x3B4:
           setBatteryVoltage(buf[0], buf[1]);
-          break;
+        break;
       }
     }
   }

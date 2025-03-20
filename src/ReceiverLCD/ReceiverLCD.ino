@@ -16,23 +16,34 @@
 #define LED_RING_PIN 26
 #define PIXEL_COUNT 8
 
-#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, !!!also change it in the sender code!!!
-
-
+// ## LCD related
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, 2 = fuelInfo, 3 = PDCsensors, 4 = speeds
+unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, ... (refer to updateDisplay() function)
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
-#define MAX_LINES 3 // max number of selectable line
+#define MAX_LINES 4 // max number of selectable line
 unsigned char selectedLine = 0; // for screens that use user selection
 
+// ## LED ring related
 Adafruit_NeoPixel ledRing(PIXEL_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
 const uint32_t standardColor = ledRing.Color(0x7E, 0x0E, 0x10);
-unsigned char ledRingState = 1; // 0 = off, 1 = static standard color
-#define LEDSTATE_COUNT 2
+unsigned char ledRingState = 1; // 0 = off, 1 = static standard color, ... (refer to updateLedRing() function)
+#define LEDSTATE_COUNT 3
 
+unsigned char ledBrightness = 70; // brightness of led ring from 0 (off) to 255 (full), going too high is not recommended because of power draw and danger of being blinded
+const unsigned char maxLedBrightness = 140; // limits the brightness of the LED ring to a reasonable level (used for adjusting via LCD)
+const unsigned char ledBrightnessStep = 7; // steps for increasing ledBrightness
 
+#define MAXPOW_RPM 4000 // used for shift indicator, adjust this for your own car, refer to spec sheets online or use the data logger of the sender module to find this point
+#define SHIFTINDICATOR_START 2000 // this is the rpm where the shift indicator will illuminate the first light
+// individual color steps of the led ring gear shift indicator
+const uint32_t gearShiftColors[PIXEL_COUNT] = {ledRing.Color(0x2E, 0xFF, 0x11), ledRing.Color(0xB6, 0xFF, 0x00), ledRing.Color(0xFF, 0xF6, 0x00), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xD5, 0x00), ledRing.Color(0xFF, 0x60, 0x21), ledRing.Color(0xFF, 0x23, 0x23)};
+
+// ## Task handles
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
+
+// ## ESP-NOW RELATED
+#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, !!!also change it in the sender code!!!
 
 typedef struct kcan_data {
   bool clutchPressed;
@@ -51,7 +62,7 @@ typedef struct kcan_data {
   float batteryVoltage; // in volts
   float avgConsumption; // in l/100km (dependent on the car settings)
   float avgSpeed; // in km/h (dependent on the car settings)
-  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), seems to also include throttle input from cruise control
+  float throttlePercentage; // throttle from 0 (foot off paddle) to 1 (flat), also includes throttle input from cruise control
   float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
@@ -103,22 +114,22 @@ void setup() {
   Serial.print("Expecting ESP-NOW messages at a size of: ");
   Serial.println(sizeof(data));
 
-  ledRing.begin();
-  ledRing.clear();
+  ledRing.begin(); // initialize LEDs
+  ledRing.show(); // initialize pixels to off
 
   // display BMW logo and 1 ms later start ledRing animation
   showStartupLogo(1);
 
   for(int i = 0; i < 3 * PIXEL_COUNT; i++) {
     ledRing.clear();
-    ledRing.setPixelColor(i % PIXEL_COUNT, standardColor);
-    ledRing.setBrightness(75);
+    ledRing.setPixelColor(i % PIXEL_COUNT, ledRing.gamma32(standardColor));
+    ledRing.setBrightness(ledBrightness);
     ledRing.show();
 
     delay(83);
   }
-  ledRing.fill(standardColor, 0, PIXEL_COUNT);
-  ledRing.setBrightness(50);
+  ledRing.fill(ledRing.gamma32(standardColor), 0, PIXEL_COUNT);
+  ledRing.setBrightness(ledBrightness);
   ledRing.show();
 
   xTaskCreatePinnedToCore(
@@ -183,6 +194,12 @@ void userInputTaskCode(void * params) {
             Serial.println("Switching LED ring state");
             ledRingState = (ledRingState + 1) % LEDSTATE_COUNT;
           break;
+
+          case 3:
+            lcdState = LCDSTATE_COUNT;
+            Serial.println("Changing LED ring brightness");
+            ledBrightness = (ledBrightness + ledBrightnessStep) % maxLedBrightness;
+          break;
         }
       }
     }
@@ -242,7 +259,7 @@ void renderingTaskCode(void * params) {
   while(1) {
     updateDisplay();
     updateLedRing();
-    delay(60); // ~16 refreshes/s
+    delay(50); // ~20 refreshes/s
   }
 }
 
@@ -277,16 +294,33 @@ void updateDisplay() {
 
 // updated the LED ring according to current wish
 void updateLedRing() {
+  ledRing.clear(); // turn off everything
+  ledRing.setBrightness(ledBrightness); // set current brightness
+
   switch(ledRingState) {
-    // ring off
-    case 0:
-      ledRing.setBrightness(0);
-    break;
+    // ring off, no need to do anything
+    case 0: break;
 
     // static standard color
     case 1:
-      ledRing.fill(standardColor, 0, PIXEL_COUNT);
-      ledRing.setBrightness(50);
+      ledRing.fill(ledRing.gamma32(standardColor), 0, PIXEL_COUNT);
+    break;
+
+    // rpm reactive shift indicator
+    case 2:
+      // complete red if rpm >= optimal shift rpm
+      if(data.engineRpm >= MAXPOW_RPM) {
+        ledRing.fill(ledRing.gamma32(gearShiftColors[7]), 0, PIXEL_COUNT);
+      } else {    // fill ring according to steps specified
+        int rpmSteps = abs(MAXPOW_RPM - SHIFTINDICATOR_START);
+
+        for(int i = 0; i < PIXEL_COUNT; i++) {
+          if(data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) {
+            ledRing.setPixelColor(i, ledRing.gamma32(gearShiftColors[i]));
+          }
+        }
+      }
+
     break;
   }
 
@@ -353,13 +387,21 @@ void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
 void getLedRingStateStr(char* stateStr) {
   switch(ledRingState) {
     case 0:
-      sprintf(stateStr, "   off");
+      sprintf(stateStr, "        off");
     break;
 
     case 1:
-      sprintf(stateStr, "static");
+      sprintf(stateStr, "     static");
+    break;
+
+    case 2:
+      sprintf(stateStr, "shift light");
     break;
   }
+}
+
+void getLedRingBrightnessPercentageStr(char* percentageStr) {
+  sprintf(percentageStr, "%3d%%", (int)(float(ledBrightness) / float(maxLedBrightness)));
 }
 
 
@@ -581,7 +623,7 @@ void drawSpeeds() {
 
 // always the last page
 void drawSelectorScreen() {
-  char outputStr[8];
+  char outputStr[13];
 
   u8g2.firstPage();
   do {
@@ -592,9 +634,13 @@ void drawSelectorScreen() {
     u8g2.drawStr(1, 8, "Next");
     u8g2.drawStr(1, 18, "LCD off");
 
-    u8g2.drawStr(1, 28, "LED ring");
+    u8g2.drawStr(1, 28, "LED mode");
     getLedRingStateStr(outputStr);
-    u8g2.drawStr(92, 28, outputStr);
+    u8g2.drawStr(62, 28, outputStr);
+
+    u8g2.drawStr(1, 38, "LED brightness");
+    getLedRingBrightnessPercentageStr(outputStr);
+    u8g2.drawStr(104, 38, outputStr);
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );
