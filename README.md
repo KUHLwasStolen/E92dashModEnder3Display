@@ -31,7 +31,7 @@ Do this at your own risk.
 
 ## Additions to the ecosystem  
 My plan is to eventually extend this system with more devices in the car.  
-Once these projects are started I will link them here
+Once these projects are started I will link them here  
 Planned:  
 - Wireless "scroll wheel"
     - *BMW iDrive*-inspired controller for the LCD
