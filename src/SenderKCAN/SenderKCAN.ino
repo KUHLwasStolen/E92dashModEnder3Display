@@ -258,7 +258,7 @@ void senderTaskCode(void * params) {
 
   while(1) {
     esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(lastSendStatus != 0 ? 1000 : 60); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+    delay(lastSendStatus != 0 ? 1000 : 55); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
   }
 }
 

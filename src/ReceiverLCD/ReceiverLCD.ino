@@ -37,6 +37,8 @@ const unsigned char ledBrightnessStep = 7; // steps for increasing ledBrightness
 #define SHIFTINDICATOR_START 2000 // this is the rpm where the shift indicator will illuminate the first light
 // individual color steps of the led ring gear shift indicator
 const uint32_t gearShiftColors[PIXEL_COUNT] = {ledRing.Color(0x2E, 0xFF, 0x11), ledRing.Color(0xB6, 0xFF, 0x00), ledRing.Color(0xFF, 0xF6, 0x00), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xD5, 0x00), ledRing.Color(0xFF, 0x60, 0x21), ledRing.Color(0xFF, 0x23, 0x23)};
+bool rpmBlinkOn = false;
+uint64_t lastBlinkChange = 0;
 
 // ## Task handles
 TaskHandle_t RenderingTask;
@@ -168,43 +170,45 @@ void userInputTaskCode(void * params) {
       pressed = true;
       Serial.println("Encoder button pressed");
       
-      if(lcdState == 0) {
-        // Turn on lcd
-        Serial.println("Turning on LCD");
-        digitalWrite(LCD_POWER_PIN, HIGH);
-        delay(30); // give it a bit of time to turn on again
-        u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
-      }
+      // only need to handle states with special cases
+      switch(lcdState) {
+        case LCDSTATE_COUNT: // selector screen
+          switch(selectedLine) {
+            case 0: // "Next"
+              lcdState = 1; // go back to the first page
+            break;
 
-      lcdState = (lcdState + 1) % (LCDSTATE_COUNT + 1);
+            case 1: // "LCD off"
+              Serial.println("Turning off LCD");
+              lcdState = 0;
+              digitalWrite(LCD_POWER_PIN, LOW);
+            break;
 
-      if(lcdState == 0) {
-        switch(selectedLine) {
-          case 0:
-            lcdState = 1; // go back to the first page
-          break;
+            case 2: // "LED mode"
+              Serial.println("Switching LED ring state");
+              ledRingState = (ledRingState + 1) % LEDSTATE_COUNT;
+            break;
 
-          case 1:
-            Serial.println("Turning off LCD");
-            digitalWrite(LCD_POWER_PIN, LOW);
-          break;
-
-          case 2:
-            lcdState = LCDSTATE_COUNT;
-            Serial.println("Switching LED ring state");
-            ledRingState = (ledRingState + 1) % LEDSTATE_COUNT;
-          break;
-
-          case 3:
-            lcdState = LCDSTATE_COUNT;
-            Serial.println("Changing LED ring brightness");
-            ledBrightness = (ledBrightness + ledBrightnessStep) % maxLedBrightness;
-          break;
-        }
+            case 3: // "LED brightness"
+              Serial.println("Changing LED ring brightness");
+              ledBrightness = (ledBrightness + ledBrightnessStep) % maxLedBrightness;
+            break;
+          }
+        break;
+        
+        case 0: // turn on LCD and switch to next screen (!no break here!)
+          Serial.println("Turning on LCD");
+          digitalWrite(LCD_POWER_PIN, HIGH);
+          delay(30); // give it a bit of time to turn on again
+          u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
+        
+        default: // show next screen
+          lcdState = (lcdState + 1) % (LCDSTATE_COUNT + 1);
       }
     }
 
-    // Encoder rotate (no direction only rotate)
+
+    // Encoder rotate (no direction detection only rotate, because direction is VERY inconsistent because of low-quality encoder on the LCD)
     if(digitalRead(EN1_PIN) == 0 || digitalRead(EN2_PIN) == 0) {
       pressed = true;
       Serial.println("Rotated");
@@ -259,7 +263,7 @@ void renderingTaskCode(void * params) {
   while(1) {
     updateDisplay();
     updateLedRing();
-    delay(50); // ~20 refreshes/s
+    delay(55); // ~18 refreshes/s
   }
 }
 
@@ -309,16 +313,23 @@ void updateLedRing() {
     // rpm reactive shift indicator
     case 2:
       // complete red if rpm >= optimal shift rpm
-      if(data.engineRpm >= MAXPOW_RPM) {
-        ledRing.fill(ledRing.gamma32(gearShiftColors[7]), 0, PIXEL_COUNT);
+      if(data.engineRpm > MAXPOW_RPM) {
+        if(!rpmBlinkOn && millis() - lastBlinkChange >= 250) {
+          rpmBlinkOn = true;
+          lastBlinkChange = millis();
+        } else if(rpmBlinkOn && millis() - lastBlinkChange >= 500) {
+          rpmBlinkOn = false;
+          lastBlinkChange = millis();
+        }
+
+        if(rpmBlinkOn) ledRing.fill(ledRing.gamma32(gearShiftColors[7]), 0, PIXEL_COUNT);
       } else {    // fill ring according to steps specified
         int rpmSteps = abs(MAXPOW_RPM - SHIFTINDICATOR_START);
+        rpmBlinkOn = false;
 
-        for(int i = 0; i < PIXEL_COUNT; i++) {
-          if(data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) {
+        for(int i = 0; i < PIXEL_COUNT; i++) 
+          if(data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) 
             ledRing.setPixelColor(i, ledRing.gamma32(gearShiftColors[i]));
-          }
-        }
       }
 
     break;
