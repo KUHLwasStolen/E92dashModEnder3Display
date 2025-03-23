@@ -25,7 +25,7 @@ unsigned char selectedLine = 0; // for screens that use user selection
 
 // ## LED ring related
 Adafruit_NeoPixel ledRing(PIXEL_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
-const uint32_t standardColor = ledRing.Color(0x7E, 0x0E, 0x10);
+const uint32_t standardColor = ledRing.Color(0xFE, 0x81, 0x06);
 unsigned char ledRingState = 1; // 0 = off, 1 = static standard color, ... (refer to updateLedRing() function)
 #define LEDSTATE_COUNT 3
 
@@ -191,7 +191,7 @@ void userInputTaskCode(void * params) {
 
             case 3: // "LED brightness"
               Serial.println("Changing LED ring brightness");
-              ledBrightness = (ledBrightness + ledBrightnessStep) % maxLedBrightness;
+              ledBrightness = (ledBrightness + ledBrightnessStep) % (maxLedBrightness + ledBrightnessStep);
             break;
           }
         break;
@@ -209,7 +209,7 @@ void userInputTaskCode(void * params) {
 
 
     // Encoder rotate (no direction detection only rotate, because direction is VERY inconsistent because of low-quality encoder on the LCD)
-    if(digitalRead(EN1_PIN) == 0 || digitalRead(EN2_PIN) == 0) {
+    if(digitalRead(EN1_PIN) == 0) {
       pressed = true;
       Serial.println("Rotated");
       selectedLine = (selectedLine + 1) % MAX_LINES;
@@ -314,17 +314,17 @@ void updateLedRing() {
     case 2:
       // complete red if rpm >= optimal shift rpm
       if(data.engineRpm > MAXPOW_RPM) {
-        if(!rpmBlinkOn && millis() - lastBlinkChange >= 250) {
+        if(!rpmBlinkOn && millis() - lastBlinkChange >= 200) {
           rpmBlinkOn = true;
           lastBlinkChange = millis();
-        } else if(rpmBlinkOn && millis() - lastBlinkChange >= 500) {
+        } else if(rpmBlinkOn && millis() - lastBlinkChange >= 400) {
           rpmBlinkOn = false;
           lastBlinkChange = millis();
         }
 
         if(rpmBlinkOn) ledRing.fill(ledRing.gamma32(gearShiftColors[7]), 0, PIXEL_COUNT);
       } else {    // fill ring according to steps specified
-        int rpmSteps = abs(MAXPOW_RPM - SHIFTINDICATOR_START);
+        int rpmSteps = (int)(abs((MAXPOW_RPM - SHIFTINDICATOR_START) / PIXEL_COUNT));
         rpmBlinkOn = false;
 
         for(int i = 0; i < PIXEL_COUNT; i++) 
@@ -412,7 +412,7 @@ void getLedRingStateStr(char* stateStr) {
 }
 
 void getLedRingBrightnessPercentageStr(char* percentageStr) {
-  sprintf(percentageStr, "%3d%%", (int)(float(ledBrightness) / float(maxLedBrightness)));
+  sprintf(percentageStr, "%3d%%", (int)(float(ledBrightness * 100) / float(maxLedBrightness)));
 }
 
 
