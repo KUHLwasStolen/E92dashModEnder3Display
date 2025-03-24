@@ -5,11 +5,12 @@ Additionally the project comes with an optional/modular data logger addon, to re
 
 The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
 
-On the left you can see the receiver/LCD module mounted in the car and on the the sender/logging module mounted in the trunk of my E92.  
+On the left you can see the receiver/LCD module mounted in the car and on the right the sender/logging module mounted in the trunk of my E92.  
 <img src="pictures/receiverMountTest.jpg" alt="picture of the receiver module mounted in the car" width="350"/> <img src="pictures/SenderInstalledTrimHanger.jpg" alt="picture of the installed sender module" width="350"/>  
-The sender is responsible for sniffing the CAN-messages and converting them into numbers and the receiver displays those numbers.  
-The data is then sent via ESP-NOW.  
+The sender is responsible for sniffing the CAN-messages and converting them into numbers and the receiver displays those numbers. Various different pages with different numbers/representations are offered.  
+The data is sent via ESP-NOW.  
 The sender module is also responsible for logging the data if wished.  
+The project is somewhat modular, as you can choose to omit logging capabilities and the LED ring on the encoder knob. You can still use the same code.  
 
 Here is some logged sample data.  
 The x-axis represents the time in seconds from when the drive started and the y-axis is longitudinal acceleration in m/s².
