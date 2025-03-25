@@ -76,6 +76,7 @@ From my testing during development, this approach has been very reliable and als
 | 0x1D0 | Engine-temperature, (intake) air pressure | **Yes** |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
 | 0x2F8 | Time and date information | **Yes** |
+| 0x3B0 | Reverse gear status | to be tested |
 | 0x330 | Range | **Yes** |
 | 0x349 | Fuel level sensors (car has two) | **Yes** |
 | 0x362 | Average fuel consumption, avg. speed | **Yes** |

@@ -17,21 +17,27 @@
 #define PIXEL_COUNT 8
 
 // ## LCD related
+#define LCD_OFF_STATE 0
+#define MIXED_DASH_STATE 1
+#define SPEED_ACCEL_STATE 2
+#define FUEL_INFO_STATE 3
+#define PDC_SENSOR_STATE 4
+
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
-unsigned char lcdState = 1; // 0 = off, 1 = mixedDash, ... (refer to updateDisplay() function)
+uint8_t lcdState = 1; // see state numbers and meanings above
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
 #define MAX_LINES 4 // max number of selectable line
-unsigned char selectedLine = 0; // for screens that use user selection
+uint8_t selectedLine = 0; // for screens that use user selection
 
 // ## LED ring related
 Adafruit_NeoPixel ledRing(PIXEL_COUNT, LED_RING_PIN, NEO_GRB + NEO_KHZ800);
 const uint32_t standardColor = ledRing.Color(0xFE, 0x81, 0x06);
-unsigned char ledRingState = 1; // 0 = off, 1 = static standard color, ... (refer to updateLedRing() function)
+uint8_t ledRingState = 1; // 0 = off, 1 = static standard color, ... (refer to updateLedRing() function)
 #define LEDSTATE_COUNT 3
 
-unsigned char ledBrightness = 70; // brightness of led ring from 0 (off) to 255 (full), going too high is not recommended because of power draw and danger of being blinded
-const unsigned char maxLedBrightness = 140; // limits the brightness of the LED ring to a reasonable level (used for adjusting via LCD)
-const unsigned char ledBrightnessStep = 7; // steps for increasing ledBrightness
+uint8_t ledBrightness = 70; // brightness of led ring from 0 (off) to 255 (full), going too high is not recommended because of power draw and danger of being blinded
+const uint8_t maxLedBrightness = 140; // limits the brightness of the LED ring to a reasonable level (used for adjusting via LCD)
+const uint8_t ledBrightnessStep = 7; // steps for increasing ledBrightness
 
 #define MAXPOW_RPM 4000 // used for shift indicator, adjust this for your own car, refer to spec sheets online or use the data logger of the sender module to find this point
 #define SHIFTINDICATOR_START 2000 // this is the rpm where the shift indicator will illuminate the first light
@@ -50,14 +56,15 @@ TaskHandle_t UserInputTask;
 typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
-  unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
-  signed short engineTemp; // in celcius
-  signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
-  unsigned short speed; // in km/h (might depend on car settings)
-  unsigned short engineRpm;
-  unsigned short range; // in km
-  unsigned short airPressEngine; // in hPa
+  bool reversed;
+  uint8_t steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  uint8_t PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
+  int16_t engineTemp; // in celcius
+  int16_t wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
+  uint16_t speed; // in km/h (might depend on car settings)
+  uint16_t engineRpm;
+  uint16_t range; // in km
+  uint16_t airPressEngine; // in hPa
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
@@ -73,7 +80,7 @@ typedef struct kcan_data {
 kcan_data data;
 
 // executed when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int len) {
+void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int32_t len) {
   memcpy(&data, incomingData, sizeof(data));
 }
 
@@ -122,7 +129,7 @@ void setup() {
   // display BMW logo and 1 ms later start ledRing animation
   showStartupLogo(1);
 
-  for(int i = 0; i < 3 * PIXEL_COUNT; i++) {
+  for(uint8_t i = 0; i < 3 * PIXEL_COUNT; i++) {
     ledRing.clear();
     ledRing.setPixelColor(i % PIXEL_COUNT, ledRing.gamma32(standardColor));
     ledRing.setBrightness(ledBrightness);
@@ -260,7 +267,31 @@ void renderingTaskCode(void * params) {
   Serial.print("Rendering task running on core ");
   Serial.println(xPortGetCoreID());
 
+  // Variables used for automatically switching to PDC screen when parking
+  uint8_t minPDC = 255, newMinPDC = 255, lastLcdState = lcdState;
+  bool lastReversed = data.reversed;
+
   while(1) {
+    for(uint8_t i = 0; i < 8; i++)
+      if(data.PDCsensors[i] < newMinPDC) newMinPDC = data.PDCsensors[i];
+
+    if(lcdState != PDC_SENSOR_STATE
+        && ((newMinPDC < 200 && minPDC > 200)
+            || (data.reversed == true && lastReversed == false))) {
+
+      lastLcdState = lcdState;
+      lcdState = PDC_SENSOR_STATE;
+      
+    } else if(lcdState == PDC_SENSOR_STATE
+              && (newMinPDC > 200 && minPDC < 200
+                  || (data.reversed == false && lastReversed == true))) {
+
+      lcdState = lastLcdState;
+    }
+
+    minPDC = newMinPDC;
+    lastReversed = data.reversed;
+
     updateDisplay();
     updateLedRing();
     delay(55); // ~18 refreshes/s
@@ -271,22 +302,21 @@ void renderingTaskCode(void * params) {
 // displays the current vehicle information
 void updateDisplay() {
   switch(lcdState) {
-    // lcd off case
-    case 0: break;
+    case LCD_OFF_STATE: break;
  
-    case 1:
+    case MIXED_DASH_STATE:
       drawMixedDash();
     break;
     
-    case 2:
+    case SPEED_ACCEL_STATE:
       drawSpeeds();
     break;
 
-    case 3:
+    case FUEL_INFO_STATE:
       drawFuelInfo();
     break;
 
-    case 4:
+    case PDC_SENSOR_STATE:
       drawPDCsensors();
     break;
 
@@ -324,10 +354,10 @@ void updateLedRing() {
 
         if(rpmBlinkOn) ledRing.fill(ledRing.gamma32(gearShiftColors[7]), 0, PIXEL_COUNT);
       } else {    // fill ring according to steps specified
-        int rpmSteps = (int)(abs((MAXPOW_RPM - SHIFTINDICATOR_START) / PIXEL_COUNT));
+        uint16_t rpmSteps = (uint16_t)(abs((MAXPOW_RPM - SHIFTINDICATOR_START) / PIXEL_COUNT));
         rpmBlinkOn = false;
 
-        for(int i = 0; i < PIXEL_COUNT; i++) 
+        for(uint8_t i = 0; i < PIXEL_COUNT; i++) 
           if(data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) 
             ledRing.setPixelColor(i, ledRing.gamma32(gearShiftColors[i]));
       }
@@ -357,7 +387,7 @@ void getBatteryVoltageStr(char* voltStr) {
   sprintf(voltStr, "%.2f V", data.batteryVoltage);
 }
 
-void getFuelLevelStr(char* fuelStr, int fuelIndex) {
+void getFuelLevelStr(char* fuelStr, uint8_t fuelIndex) {
   switch(fuelIndex) {
     case 1:
       sprintf(fuelStr, "%.1f l", data.fuelLevel1);
@@ -387,11 +417,11 @@ void getAvgSpeedStr(char* speedStr) {
   sprintf(speedStr, "%.1f km/h", data.avgSpeed);
 }
 
-void getPDCstr(char* pdcStr, unsigned char index, bool displayedLeft) {
+void getPDCstr(char* pdcStr, uint8_t index, bool displayedLeft) {
   sprintf(pdcStr, displayedLeft ? "%d cm": "%3d cm", data.PDCsensors[index]);
 }
 
-void getSpeedStr(char* speedStr, unsigned char index, bool displayedLeft) {
+void getSpeedStr(char* speedStr, uint8_t index, bool displayedLeft) {
   sprintf(speedStr, displayedLeft ? "%d" : "%3d", index < 4 ? data.wheelSpeeds[index] : data.speed);
 }
 
@@ -485,7 +515,7 @@ void drawMixedDash() {
     u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0f), 5);
 
     // Steering position
-    int barWidth = -round(data.steeringPosition * 64.0f);
+    int16_t barWidth = -round(data.steeringPosition * 64.0f);
     if(barWidth >= 0) {
       u8g2.drawBox(64, 61, barWidth, 3);
     } else {
@@ -498,9 +528,9 @@ void drawMixedDash() {
 // displays fuel levels
 void drawFuelInfo() {
   // max fuel is about 62 liters which we will map to a height of 32 pixels (about half of the display)
-  int level1Height = 63 - (int)round(data.fuelLevel1 * (32.0f/62.0f));
-  int level2Height = 63 - (int)round(data.fuelLevel2 * (32.0f/62.0f));
-  int textHeight = 52; // this puts text above fuel level but may collide with new text on top: level1Height < level2Height ? level1Height - 1 : level2Height - 1;
+  int16_t level1Height = 63 - (int16_t)round(data.fuelLevel1 * (32.0f/62.0f));
+  int16_t level2Height = 63 - (int16_t)round(data.fuelLevel2 * (32.0f/62.0f));
+  int16_t textHeight = 52; // alternatively: this puts text above fuel level but may collide with new text on top: level1Height < level2Height ? level1Height - 1 : level2Height - 1;
   char outputStr[15];
 
   u8g2.firstPage();
@@ -589,8 +619,8 @@ void drawSpeeds() {
   char outputStr[6];
 
   // 1 g translates to 40 pixels
-  int xOffset = (int)round((data.accelerationCross / 9.81f) * 40.0f);
-  int yOffset = (int)round((data.accelerationLong / 9.81f) * 40.0f);
+  int16_t xOffset = (int16_t)round((data.accelerationCross / 9.81f) * 40.0f);
+  int16_t yOffset = (int16_t)round((data.accelerationLong / 9.81f) * 40.0f);
 
   u8g2.firstPage();
   do {
@@ -667,9 +697,9 @@ void displayErrorMessage(char * message) {
 }
 
 // displays a simple BMW logo on the lcd for the given amount of time
-void showStartupLogo(int duration) {
+void showStartupLogo(uint32_t duration) {
   // 'bmw-2-logo-png-transparent', 128x64px
-  const unsigned char bmwLogo [] PROGMEM = {
+  const uint8_t bmwLogo [] PROGMEM = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, 0xc0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f, 0x00, 0x00, 0xfc, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00, 0xf0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 

@@ -18,24 +18,25 @@
 // Replace with the MAC address of your receiver! (see serial output of the receiver)
 uint8_t LCDreceiverAddress[] = {0x58, 0xBF, 0x25, 0x9D, 0xF5, 0x70};
 
-unsigned short dateYear = 0;
-unsigned char dateMonth;
-unsigned char dateDay;
-unsigned char dateHour;
-unsigned char dateMinute;
-unsigned char dateSecond;
+uint16_t dateYear = 0;
+uint8_t dateMonth;
+uint8_t dateDay;
+uint8_t dateHour;
+uint8_t dateMinute;
+uint8_t dateSecond;
 
 typedef struct kcan_data {
   bool clutchPressed;
   bool brakePressed;
-  unsigned char steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
-  unsigned char PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
-  signed short engineTemp; // in celcius
-  signed short wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
-  unsigned short speed; // in km/h (might depend on car settings)
-  unsigned short engineRpm;
-  unsigned short range; // in km
-  unsigned short airPressEngine; // in hPa
+  bool reversed;
+  uint8_t steeringWheelButtons; // each bit one button (use functions below): 2^0=VolumeUp, 2^1=VolumeDown, 2^2=UpButton, 2^3=DownButton, 2^4=TelephoneButton, 2^5=VoiceButton, 2^6=RotateButton, 2^7=DiskButton
+  uint8_t PDCsensors[8]; // in cm, order: rear-L, rear-L2, rear-R2, rear-R, front-L, front-L2, front-R2, front-R
+  int16_t engineTemp; // in celcius
+  int16_t wheelSpeeds[4]; // in km/h (might depend on car settings), order: front-L, front-R, rear-L, rear-R
+  uint16_t speed; // in km/h (might depend on car settings)
+  uint16_t engineRpm;
+  uint16_t range; // in km
+  uint16_t airPressEngine; // in hPa
   float fuelLevel1; // in liter
   float fuelLevel2; // in liter
   float engineTorque; // in Nm, can be negative!
@@ -177,8 +178,8 @@ void dataTaskCode(void * params) {
   Serial.print("Data task running on core ");
   Serial.println(xPortGetCoreID());
 
-  unsigned char len = 0;
-  unsigned char buf[8];
+  uint8_t len = 0;
+  uint8_t buf[8];
 
   while(1) {
     if (CAN_MSGAVAIL == CAN.checkReceive()) { // Message received
@@ -226,6 +227,10 @@ void dataTaskCode(void * params) {
 
         case 0x2F8:
           setTimeAndDate(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
+        break;
+
+        case 0x3B0:
+          setReversed(buf[0]);
         break;
 
         case 0x330:
@@ -276,7 +281,7 @@ void loggerTaskCode(void * params) {
   }
 
   char printString[1024];
-  unsigned char flushCounter = 0;
+  uint8_t flushCounter = 0;
 
   Serial.print("Writing log to: ");
   Serial.println(logFile.name());
@@ -303,82 +308,82 @@ void loggerTaskCode(void * params) {
 
 // ### CAN conversion functions ordered by ID ###
 // from 0x0A8
-void setEngineTorque(unsigned char byte1, unsigned char byte2) {
+void setEngineTorque(uint8_t byte1, uint8_t byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
-  signed short combined = (signed short)(((unsigned short)byte2 << 8) + (unsigned short)byte1) >> 4; // rightmost 4 bits are a status message
+  int16_t combined = (int16_t)(((uint16_t)byte2 << 8) + (uint16_t)byte1) >> 4; // rightmost 4 bits are a status message
   data.engineTorque = (float)combined / 2.0f;
 }
 
 // from 0x0A8
-void setClutchPressed(unsigned char byte5) {
+void setClutchPressed(uint8_t byte5) {
   // to check first bit we only need to check if the number is odd or even
   data.clutchPressed = byte5 % 2;
 }
 
 // from 0x0A8
-void setBrakePressed(unsigned char byte7) {
+void setBrakePressed(uint8_t byte7) {
   // last three bits are brake status
   data.brakePressed = byte7 >> 5;
 }
 
 // from 0x0AA
-void setThrottlePercentage(unsigned char byte3) {
+void setThrottlePercentage(uint8_t byte3) {
   data.throttlePercentage = ((float)byte3) / 255.0f;
 }
 
 // from 0x0AA
-void setEngineRpm(unsigned char byte4, unsigned char byte5) {
-  data.engineRpm = round((float)(((unsigned short)byte5 << 8) + (unsigned short)byte4) / 4.0f);
+void setEngineRpm(uint8_t byte4, uint8_t byte5) {
+  data.engineRpm = round((float)(((uint16_t)byte5 << 8) + (uint16_t)byte4) / 4.0f);
 }
 
 // from 0x0C8
-void setSteeringPosition(unsigned char byte0, unsigned char byte1) {
+void setSteeringPosition(uint8_t byte0, uint8_t byte1) {
   // value is in 2s compliment (can be negative), to get the angle in degrees devide by 22.75 and the max steering angle is 600°
   // negative means to the right and positive to the left --> value between -13650 and +13650 (-600° and 600°)
-  signed short combined = ((unsigned short)byte1 << 8) + (unsigned short)byte0;
+  int16_t combined = ((uint16_t)byte1 << 8) + (uint16_t)byte0;
 
   data.steeringPosition = (float)combined / 13650.0f;
 }
 
 // from 0x0CE
-void setWheelSpeeds(unsigned char* values, unsigned char len) { // len should always be 8, just to be safe
-  for(int i = 0; i < len / 2; i++) {
-    data.wheelSpeeds[i] = (signed short)(((unsigned short)values[(2 * i) + 1] << 8) + (unsigned short)values[2 * i]) / 16;
+void setWheelSpeeds(uint8_t* values, uint8_t len) { // len should always be 8, just to be safe
+  for(uint8_t i = 0; i < len / 2; i++) {
+    data.wheelSpeeds[i] = (int16_t)(((uint16_t)values[(2 * i) + 1] << 8) + (uint16_t)values[2 * i]) / 16;
   }
 }
 
 // from 0x1A0
-void setSpeed(unsigned char byte0, unsigned char byte1) {
-  data.speed = (((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10;
+void setSpeed(uint8_t byte0, uint8_t byte1) {
+  data.speed = (((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10;
 }
 
 // from 0x1A0
-void setAcceleration(unsigned char byte2, unsigned char byte3, unsigned char byte4) {
-  data.accelerationLong = (((signed short)((signed char)(byte3 << 4)) << 4) + (signed short)byte2) / 40.0f;
-  data.accelerationCross = ((((signed short)(signed char)byte4) << 4) + (((signed short)byte3) >> 4)) / 40.0f;
+void setAcceleration(uint8_t byte2, uint8_t byte3, uint8_t byte4) {
+  data.accelerationLong = (((int16_t)((int8_t)(byte3 << 4)) << 4) + (int16_t)byte2) / 40.0f;
+  data.accelerationCross = ((((int16_t)(int8_t)byte4) << 4) + (((int16_t)byte3) >> 4)) / 40.0f;
 }
 
 // from 0x1C2
-void setPDCsensors(unsigned char* values, unsigned char len) { // len should always be 8, just to be safe
-  for(int i = 0; i < len; i++) {
+void setPDCsensors(uint8_t* values, uint8_t len) { // len should always be 8, just to be safe
+  for(uint8_t i = 0; i < len; i++) {
     data.PDCsensors[i] = values[i];
   }
 }
 
 // from 0x1D0
-void setEngineTemp(unsigned char byte0) {
-  data.engineTemp = (signed short)byte0 - 48;
+void setEngineTemp(uint8_t byte0) {
+  data.engineTemp = (int16_t)byte0 - 48;
 }
 
 // from 0x1D0
-void setAirPressEngine(unsigned char byte3) {
-  data.airPressEngine = (((unsigned short)byte3) * 2) + 598;
+void setAirPressEngine(uint8_t byte3) {
+  data.airPressEngine = (((uint16_t)byte3) * 2) + 598;
 }
 
 // from 0x1D6
-void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
-  // the steering wheel has 8 buttons --> to be space efficient store them in one unsigned char
-  unsigned char tempButtons = 0;
+void setSteeringWheelButtons(uint8_t byte0, uint8_t byte1) {
+  // the steering wheel has 8 buttons --> to be space efficient store them in one uint8_t
+  uint8_t tempButtons = 0;
 
   // Volume up at bit 4
   if((byte0 >> 3) % 2) {
@@ -417,8 +422,8 @@ void setSteeringWheelButtons(unsigned char byte0, unsigned char byte1) {
 }
 
 // from 0x2F8
-void setTimeAndDate(unsigned char byte0, unsigned char byte1, unsigned char byte2, unsigned char byte3, unsigned char byte4, unsigned char byte5, unsigned char byte6) {
-  dateYear = ((unsigned short)byte6 << 8) + (unsigned short)byte5;
+void setTimeAndDate(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4, uint8_t byte5, uint8_t byte6) {
+  dateYear = ((uint16_t)byte6 << 8) + (uint16_t)byte5;
   dateMonth = byte4 >> 4;
   dateDay = byte3;
   dateSecond = byte2;
@@ -426,32 +431,38 @@ void setTimeAndDate(unsigned char byte0, unsigned char byte1, unsigned char byte
   dateHour = byte0;
 }
 
+// from 0x3B0
+void setReversed(uint8_t byte0) {
+  // right-most bit is 0 if reversed and 1 if not reversed
+  data.reversed = !(byte0 % 2);
+}
+
 // from 0x330
-void setRange(unsigned char byte6, unsigned char byte7) {
-  data.range = (((unsigned short)byte7 << 8) + (unsigned short)byte6) / (unsigned short)16;
+void setRange(uint8_t byte6, uint8_t byte7) {
+  data.range = (((uint16_t)byte7 << 8) + (uint16_t)byte6) / (uint16_t)16;
 }
 
 // from 0x349
-void setFuelLevels(unsigned char byte0, unsigned char byte1, unsigned char byte2, unsigned char byte3) {
-  data.fuelLevel1 = (float)(((unsigned short)byte1 << 8) + (unsigned short)byte0) / 160.0f;
-  data.fuelLevel2 = (float)(((unsigned short)byte3 << 8) + (unsigned short)byte2) / 160.0f;
+void setFuelLevels(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3) {
+  data.fuelLevel1 = (float)(((uint16_t)byte1 << 8) + (uint16_t)byte0) / 160.0f;
+  data.fuelLevel2 = (float)(((uint16_t)byte3 << 8) + (uint16_t)byte2) / 160.0f;
 }
 
 // from 0x362
-void setAvgConsumption(unsigned char byte1, unsigned char byte2) {
-  data.avgConsumption = (float)(((unsigned short)byte2 << 4) + ((unsigned short)byte1 >> 4)) / 10.0f;
+void setAvgConsumption(uint8_t byte1, uint8_t byte2) {
+  data.avgConsumption = (float)(((uint16_t)byte2 << 4) + ((uint16_t)byte1 >> 4)) / 10.0f;
 }
 
 // from 0x362
-void setAvgSpeed(unsigned char byte0, unsigned char byte1) {
+void setAvgSpeed(uint8_t byte0, uint8_t byte1) {
   // yes, shifting in 2 steps is intentional here, to get rid of the upper half
-  data.avgSpeed = (float)(((unsigned short)((unsigned char)(byte1 << 4)) << 4) + (unsigned short)byte0) / 10.0f;
+  data.avgSpeed = (float)(((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10.0f;
 }
 
 // from 0x3B4
-void setBatteryVoltage(unsigned char byte0, unsigned char byte1) {
+void setBatteryVoltage(uint8_t byte0, uint8_t byte1) {
   // (((Byte[1]-240 )*256)+Byte[0])/68 
-  data.batteryVoltage = (float)(((unsigned short)(byte1 - (unsigned char)0xF0) << 8) + (unsigned char)byte0) / 68.0f;
+  data.batteryVoltage = (float)(((uint16_t)(byte1 - (uint8_t)0xF0) << 8) + (uint8_t)byte0) / 68.0f;
 }
 
 
