@@ -25,7 +25,7 @@ uint8_t dateHour;
 uint8_t dateMinute;
 uint8_t dateSecond;
 
-typedef struct kcan_data {
+typedef struct kcan_data_t {
   bool clutchPressed;
   bool brakePressed;
   bool reversed;
@@ -47,9 +47,15 @@ typedef struct kcan_data {
   float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
-} kcan_data;
+} kcan_data_t;
 
-kcan_data data;
+typedef struct sd_data_t {
+  uint16_t usedMiB;
+  uint16_t totalMiB;
+} sd_data_t;
+
+kcan_data_t kcan_data;
+sd_data_t sd_data;
 esp_now_peer_info_t receiverInfo;
 esp_now_send_status_t lastSendStatus = (esp_now_send_status_t)0;
 
@@ -57,6 +63,7 @@ mcp2515_can CAN(CAN_CS_PIN);
 
 SPIClass hspi(HSPI);
 bool loggingModule = false;
+uint64_t sdDataSent = 0;
 
 TaskHandle_t DataTask;
 TaskHandle_t SenderTask;
@@ -103,7 +110,7 @@ void setup() {
   Serial.println("ESP-NOW init successful!");
 
   Serial.print("Sending ESP-NOW messages at a size of: ");
-  Serial.println(sizeof(data));
+  Serial.println(sizeof(kcan_data));
   Serial.println();
 
 
@@ -134,7 +141,7 @@ void setup() {
   } else {
     loggingModule = true;
     Serial.println("SD card module initialized successfully");
-    Serial.printf("SD storage: %lluMiB / %lluMiB\n", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024));
+    Serial.printf("SD storage: %llu MiB/%llu MiB\n", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024));
   }
   Serial.println();
 
@@ -229,10 +236,6 @@ void dataTaskCode(void * params) {
           setTimeAndDate(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
         break;
 
-        case 0x3B0:
-          setReversed(buf[0]);
-        break;
-
         case 0x330:
           setRange(buf[6], buf[7]);
         break;
@@ -244,6 +247,10 @@ void dataTaskCode(void * params) {
         case 0x362:
           setAvgConsumption(buf[1], buf[2]);
           setAvgSpeed(buf[0], buf[1]);
+        break;
+
+        case 0x3B0:
+          setReversed(buf[0]);
         break;
 
         case 0x3B4:
@@ -259,11 +266,26 @@ void senderTaskCode(void * params) {
   Serial.print("Sender task running on core ");
   Serial.println(xPortGetCoreID());
 
-  esp_err_t sendErr;
+  // check if module is installed here and not in loop to avoid checking too often
+  if(loggingModule) {
+    while(1) {
+      esp_now_send(LCDreceiverAddress, (uint8_t *)&kcan_data, sizeof(kcan_data));
 
-  while(1) {
-    esp_now_send(LCDreceiverAddress, (uint8_t *) &data, sizeof(data));
-    delay(lastSendStatus != 0 ? 1000 : 55); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+      if(millis() - sdDataSent >= 60000) {
+        sd_data.usedMiB = SD.usedBytes() / (1024 * 1024);
+        sd_data.totalMiB = SD.totalBytes() / (1024 * 1024);
+        esp_now_send(LCDreceiverAddress, (uint8_t *)&sd_data, sizeof(sd_data));
+        sdDataSent = millis();
+      }
+
+      delay(lastSendStatus != 0 ? 1000 : 55); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+    }
+  } else {
+    while(1) {
+      esp_now_send(LCDreceiverAddress, (uint8_t *)&kcan_data, sizeof(kcan_data));
+
+      delay(lastSendStatus != 0 ? 1000 : 55); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
+    }
   }
 }
 
@@ -288,12 +310,12 @@ void loggerTaskCode(void * params) {
 
   float enginePower;
   while(1) {
-    enginePower = ((float)data.engineRpm * data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
+    enginePower = ((float)kcan_data.engineRpm * kcan_data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
 
     // use hex where possible to save space
-    sprintf(printString, "%.2f;%X;%X;%X;%hX;%hX;%hX;%hX;%hX;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, data.clutchPressed, data.brakePressed, data.steeringWheelButtons,
-        data.engineTemp, data.wheelSpeeds[0], data.wheelSpeeds[1], data.wheelSpeeds[2], data.wheelSpeeds[3], data.speed, data.engineRpm, data.range, data.airPressEngine, data.fuelLevel1, data.fuelLevel2,
-        data.engineTorque, data.batteryVoltage, data.avgConsumption, data.avgSpeed, data.throttlePercentage, data.steeringPosition, data.accelerationLong, data.accelerationCross, enginePower);
+    sprintf(printString, "%.2f;%X;%X;%X;%hX;%hX;%hX;%hX;%hX;%X;%X;%X;%X;%.1f;%.1f;%.1f;%.1f;%.1f;%.1f;%.4f;%.4f;%.4f;%.4f;%.4f;\n", millis() / 1000.0f, kcan_data.clutchPressed, kcan_data.brakePressed, kcan_data.steeringWheelButtons,
+        kcan_data.engineTemp, kcan_data.wheelSpeeds[0], kcan_data.wheelSpeeds[1], kcan_data.wheelSpeeds[2], kcan_data.wheelSpeeds[3], kcan_data.speed, kcan_data.engineRpm, kcan_data.range, kcan_data.airPressEngine, kcan_data.fuelLevel1, kcan_data.fuelLevel2,
+        kcan_data.engineTorque, kcan_data.batteryVoltage, kcan_data.avgConsumption, kcan_data.avgSpeed, kcan_data.throttlePercentage, kcan_data.steeringPosition, kcan_data.accelerationLong, kcan_data.accelerationCross, enginePower);
     logFile.print(printString);
 
     flushCounter = (flushCounter + 1) % 20; // flush after every 20th log to not lose too much data when power is shut off, but also not overdo it
@@ -311,29 +333,29 @@ void loggerTaskCode(void * params) {
 void setEngineTorque(uint8_t byte1, uint8_t byte2) {
   // from loopbunny.co.uk: "This reports the real-time torque value the engine is currently producing. This value is twos compliment and can also be negative"
   int16_t combined = (int16_t)(((uint16_t)byte2 << 8) + (uint16_t)byte1) >> 4; // rightmost 4 bits are a status message
-  data.engineTorque = (float)combined / 2.0f;
+  kcan_data.engineTorque = (float)combined / 2.0f;
 }
 
 // from 0x0A8
 void setClutchPressed(uint8_t byte5) {
   // to check first bit we only need to check if the number is odd or even
-  data.clutchPressed = byte5 % 2;
+  kcan_data.clutchPressed = byte5 % 2;
 }
 
 // from 0x0A8
 void setBrakePressed(uint8_t byte7) {
   // last three bits are brake status
-  data.brakePressed = byte7 >> 5;
+  kcan_data.brakePressed = byte7 >> 5;
 }
 
 // from 0x0AA
 void setThrottlePercentage(uint8_t byte3) {
-  data.throttlePercentage = ((float)byte3) / 255.0f;
+  kcan_data.throttlePercentage = ((float)byte3) / 255.0f;
 }
 
 // from 0x0AA
 void setEngineRpm(uint8_t byte4, uint8_t byte5) {
-  data.engineRpm = round((float)(((uint16_t)byte5 << 8) + (uint16_t)byte4) / 4.0f);
+  kcan_data.engineRpm = round((float)(((uint16_t)byte5 << 8) + (uint16_t)byte4) / 4.0f);
 }
 
 // from 0x0C8
@@ -342,42 +364,42 @@ void setSteeringPosition(uint8_t byte0, uint8_t byte1) {
   // negative means to the right and positive to the left --> value between -13650 and +13650 (-600° and 600°)
   int16_t combined = ((uint16_t)byte1 << 8) + (uint16_t)byte0;
 
-  data.steeringPosition = (float)combined / 13650.0f;
+  kcan_data.steeringPosition = (float)combined / 13650.0f;
 }
 
 // from 0x0CE
 void setWheelSpeeds(uint8_t* values, uint8_t len) { // len should always be 8, just to be safe
   for(uint8_t i = 0; i < len / 2; i++) {
-    data.wheelSpeeds[i] = (int16_t)(((uint16_t)values[(2 * i) + 1] << 8) + (uint16_t)values[2 * i]) / 16;
+    kcan_data.wheelSpeeds[i] = (int16_t)(((uint16_t)values[(2 * i) + 1] << 8) + (uint16_t)values[2 * i]) / 16;
   }
 }
 
 // from 0x1A0
 void setSpeed(uint8_t byte0, uint8_t byte1) {
-  data.speed = (((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10;
+  kcan_data.speed = (((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10;
 }
 
 // from 0x1A0
 void setAcceleration(uint8_t byte2, uint8_t byte3, uint8_t byte4) {
-  data.accelerationLong = (((int16_t)((int8_t)(byte3 << 4)) << 4) + (int16_t)byte2) / 40.0f;
-  data.accelerationCross = ((((int16_t)(int8_t)byte4) << 4) + (((int16_t)byte3) >> 4)) / 40.0f;
+  kcan_data.accelerationLong = (((int16_t)((int8_t)(byte3 << 4)) << 4) + (int16_t)byte2) / 40.0f;
+  kcan_data.accelerationCross = ((((int16_t)(int8_t)byte4) << 4) + (((int16_t)byte3) >> 4)) / 40.0f;
 }
 
 // from 0x1C2
 void setPDCsensors(uint8_t* values, uint8_t len) { // len should always be 8, just to be safe
   for(uint8_t i = 0; i < len; i++) {
-    data.PDCsensors[i] = values[i];
+    kcan_data.PDCsensors[i] = values[i];
   }
 }
 
 // from 0x1D0
 void setEngineTemp(uint8_t byte0) {
-  data.engineTemp = (int16_t)byte0 - 48;
+  kcan_data.engineTemp = (int16_t)byte0 - 48;
 }
 
 // from 0x1D0
 void setAirPressEngine(uint8_t byte3) {
-  data.airPressEngine = (((uint16_t)byte3) * 2) + 598;
+  kcan_data.airPressEngine = (((uint16_t)byte3) * 2) + 598;
 }
 
 // from 0x1D6
@@ -418,7 +440,7 @@ void setSteeringWheelButtons(uint8_t byte0, uint8_t byte1) {
     tempButtons += 128;
   }
 
-  data.steeringWheelButtons = tempButtons;
+  kcan_data.steeringWheelButtons = tempButtons;
 }
 
 // from 0x2F8
@@ -431,38 +453,38 @@ void setTimeAndDate(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3, 
   dateHour = byte0;
 }
 
-// from 0x3B0
-void setReversed(uint8_t byte0) {
-  // right-most bit is 0 if reversed and 1 if not reversed
-  data.reversed = !(byte0 % 2);
-}
-
 // from 0x330
 void setRange(uint8_t byte6, uint8_t byte7) {
-  data.range = (((uint16_t)byte7 << 8) + (uint16_t)byte6) / (uint16_t)16;
+  kcan_data.range = (((uint16_t)byte7 << 8) + (uint16_t)byte6) / (uint16_t)16;
 }
 
 // from 0x349
 void setFuelLevels(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3) {
-  data.fuelLevel1 = (float)(((uint16_t)byte1 << 8) + (uint16_t)byte0) / 160.0f;
-  data.fuelLevel2 = (float)(((uint16_t)byte3 << 8) + (uint16_t)byte2) / 160.0f;
+  kcan_data.fuelLevel1 = (float)(((uint16_t)byte1 << 8) + (uint16_t)byte0) / 160.0f;
+  kcan_data.fuelLevel2 = (float)(((uint16_t)byte3 << 8) + (uint16_t)byte2) / 160.0f;
 }
 
 // from 0x362
 void setAvgConsumption(uint8_t byte1, uint8_t byte2) {
-  data.avgConsumption = (float)(((uint16_t)byte2 << 4) + ((uint16_t)byte1 >> 4)) / 10.0f;
+  kcan_data.avgConsumption = (float)(((uint16_t)byte2 << 4) + ((uint16_t)byte1 >> 4)) / 10.0f;
 }
 
 // from 0x362
 void setAvgSpeed(uint8_t byte0, uint8_t byte1) {
   // yes, shifting in 2 steps is intentional here, to get rid of the upper half
-  data.avgSpeed = (float)(((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10.0f;
+  kcan_data.avgSpeed = (float)(((uint16_t)((uint8_t)(byte1 << 4)) << 4) + (uint16_t)byte0) / 10.0f;
+}
+
+// from 0x3B0
+void setReversed(uint8_t byte0) {
+  // right-most bit is 0 if reversed and 1 if not reversed
+  kcan_data.reversed = !(byte0 % 2);
 }
 
 // from 0x3B4
 void setBatteryVoltage(uint8_t byte0, uint8_t byte1) {
   // (((Byte[1]-240 )*256)+Byte[0])/68 
-  data.batteryVoltage = (float)(((uint16_t)(byte1 - (uint8_t)0xF0) << 8) + (uint8_t)byte0) / 68.0f;
+  kcan_data.batteryVoltage = (float)(((uint16_t)(byte1 - (uint8_t)0xF0) << 8) + (uint8_t)byte0) / 68.0f;
 }
 
 

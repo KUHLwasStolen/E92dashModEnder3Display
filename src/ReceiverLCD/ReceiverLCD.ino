@@ -53,7 +53,7 @@ TaskHandle_t UserInputTask;
 // ## ESP-NOW RELATED
 #define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, !!!also change it in the sender code!!!
 
-typedef struct kcan_data {
+typedef struct kcan_data_t {
   bool clutchPressed;
   bool brakePressed;
   bool reversed;
@@ -75,13 +75,23 @@ typedef struct kcan_data {
   float steeringPosition; // +1 -> fully (600°) to the left, 0 -> centered, -1 -> fully (600°) to the right
   float accelerationLong; // in m/s²
   float accelerationCross; // in m/s²
-} kcan_data;
+} kcan_data_t;
 
-kcan_data data;
+typedef struct sd_data_t {
+  uint16_t usedMiB;
+  uint16_t totalMiB;
+} sd_data_t;
+
+kcan_data_t kcan_data;
+sd_data_t sd_data = {0, 0};
 
 // executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int32_t len) {
-  memcpy(&data, incomingData, sizeof(data));
+  if(len == sizeof(kcan_data)) {
+    memcpy(&kcan_data, incomingData, sizeof(kcan_data));
+  } else {
+    memcpy(&sd_data, incomingData, sizeof(sd_data));
+  }
 }
 
 
@@ -121,7 +131,7 @@ void setup() {
   Serial.println("Succesfully initialized ESP-NOW");
   
   Serial.print("Expecting ESP-NOW messages at a size of: ");
-  Serial.println(sizeof(data));
+  Serial.println(sizeof(kcan_data));
 
   ledRing.begin(); // initialize LEDs
   ledRing.show(); // initialize pixels to off
@@ -269,28 +279,28 @@ void renderingTaskCode(void * params) {
 
   // Variables used for automatically switching to PDC screen when parking
   uint8_t minPDC = 255, newMinPDC = 255, lastLcdState = lcdState;
-  bool lastReversed = data.reversed;
+  bool lastReversed = kcan_data.reversed;
 
   while(1) {
     for(uint8_t i = 0; i < 8; i++)
-      if(data.PDCsensors[i] < newMinPDC) newMinPDC = data.PDCsensors[i];
+      if(kcan_data.PDCsensors[i] < newMinPDC) newMinPDC = kcan_data.PDCsensors[i];
 
     if(lcdState != PDC_SENSOR_STATE
         && ((newMinPDC < 200 && minPDC > 200)
-            || (data.reversed == true && lastReversed == false))) {
+            || (kcan_data.reversed == true && lastReversed == false))) {
 
       lastLcdState = lcdState;
       lcdState = PDC_SENSOR_STATE;
       
     } else if(lcdState == PDC_SENSOR_STATE
               && (newMinPDC > 200 && minPDC < 200
-                  || (data.reversed == false && lastReversed == true))) {
+                  || (kcan_data.reversed == false && lastReversed == true))) {
 
       lcdState = lastLcdState;
     }
 
     minPDC = newMinPDC;
-    lastReversed = data.reversed;
+    lastReversed = kcan_data.reversed;
 
     updateDisplay();
     updateLedRing();
@@ -343,7 +353,7 @@ void updateLedRing() {
     // rpm reactive shift indicator
     case 2:
       // complete red if rpm >= optimal shift rpm
-      if(data.engineRpm > MAXPOW_RPM) {
+      if(kcan_data.engineRpm > MAXPOW_RPM) {
         if(!rpmBlinkOn && millis() - lastBlinkChange >= 200) {
           rpmBlinkOn = true;
           lastBlinkChange = millis();
@@ -358,7 +368,7 @@ void updateLedRing() {
         rpmBlinkOn = false;
 
         for(uint8_t i = 0; i < PIXEL_COUNT; i++) 
-          if(data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) 
+          if(kcan_data.engineRpm >= SHIFTINDICATOR_START + (rpmSteps * i)) 
             ledRing.setPixelColor(i, ledRing.gamma32(gearShiftColors[i]));
       }
 
@@ -371,30 +381,30 @@ void updateLedRing() {
 
 // ### Display rendering helper functions ###
 void getEngineTempStr(char* tempStr) {
-  sprintf(tempStr, "%+d C", data.engineTemp);
+  sprintf(tempStr, "%+d C", kcan_data.engineTemp);
 }
 
 void getEnginePowerStr(char* powStr) {
-  float enginePower = ((float)data.engineRpm * data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
+  float enginePower = ((float)kcan_data.engineRpm * kcan_data.engineTorque * ((2.0f * PI) / 60.0f)) / 1000.0f;
   sprintf(powStr, "%d kW", (int)round(enginePower));
 }
 
 void getEngineTorqueStr(char* torqueStr) {
-  sprintf(torqueStr, "%d Nm", (int)round(data.engineTorque));
+  sprintf(torqueStr, "%d Nm", (int)round(kcan_data.engineTorque));
 }
 
 void getBatteryVoltageStr(char* voltStr) {
-  sprintf(voltStr, "%.2f V", data.batteryVoltage);
+  sprintf(voltStr, "%.2f V", kcan_data.batteryVoltage);
 }
 
 void getFuelLevelStr(char* fuelStr, uint8_t fuelIndex) {
   switch(fuelIndex) {
     case 1:
-      sprintf(fuelStr, "%.1f l", data.fuelLevel1);
+      sprintf(fuelStr, "%.1f l", kcan_data.fuelLevel1);
     break;
 
     case 2:
-      sprintf(fuelStr, "%4.1f l", data.fuelLevel2);
+      sprintf(fuelStr, "%4.1f l", kcan_data.fuelLevel2);
     break;
 
     default: sprintf(fuelStr, "N/A");
@@ -402,27 +412,27 @@ void getFuelLevelStr(char* fuelStr, uint8_t fuelIndex) {
 }
 
 void getFuelPercentageStr(char* fuelStr) {
-  sprintf(fuelStr, "%4.1f%%", ((data.fuelLevel1 + data.fuelLevel2) * 100.0f) / (2.0f * 62.0f));
+  sprintf(fuelStr, "%4.1f%%", ((kcan_data.fuelLevel1 + kcan_data.fuelLevel2) * 100.0f) / (2.0f * 62.0f));
 }
 
 void getRangeStr(char* rangeStr) {
-  sprintf(rangeStr, "%d km", data.range);
+  sprintf(rangeStr, "%d km", kcan_data.range);
 }
 
 void getAvgConsumptionStr(char* consStr) {
-  sprintf(consStr, "%.1f l/100km", data.avgConsumption);
+  sprintf(consStr, "%.1f l/100km", kcan_data.avgConsumption);
 }
 
 void getAvgSpeedStr(char* speedStr) {
-  sprintf(speedStr, "%.1f km/h", data.avgSpeed);
+  sprintf(speedStr, "%.1f km/h", kcan_data.avgSpeed);
 }
 
 void getPDCstr(char* pdcStr, uint8_t index, bool displayedLeft) {
-  sprintf(pdcStr, displayedLeft ? "%d cm": "%3d cm", data.PDCsensors[index]);
+  sprintf(pdcStr, displayedLeft ? "%d cm": "%3d cm", kcan_data.PDCsensors[index]);
 }
 
 void getSpeedStr(char* speedStr, uint8_t index, bool displayedLeft) {
-  sprintf(speedStr, displayedLeft ? "%d" : "%3d", index < 4 ? data.wheelSpeeds[index] : data.speed);
+  sprintf(speedStr, displayedLeft ? "%d" : "%3d", index < 4 ? kcan_data.wheelSpeeds[index] : kcan_data.speed);
 }
 
 void getLedRingStateStr(char* stateStr) {
@@ -445,39 +455,43 @@ void getLedRingBrightnessPercentageStr(char* percentageStr) {
   sprintf(percentageStr, "%3d%%", (int)(float(ledBrightness * 100) / float(maxLedBrightness)));
 }
 
+void getSdCardStr(char* SdStr) {
+  sprintf(SdStr, "%5u/%5u MiB", sd_data.usedMiB, sd_data.totalMiB);
+}
+
 
 // ### Logic helper functions ###
 //  ## Convert steeringWheelButtons into bools
 bool volumeUpPressed() {
-  return data.steeringWheelButtons % 2;
+  return kcan_data.steeringWheelButtons % 2;
 }
 
 bool volumeDownPressed() {
-  return (data.steeringWheelButtons >> 1) % 2;
+  return (kcan_data.steeringWheelButtons >> 1) % 2;
 }
 
 bool upPressed() {
-  return (data.steeringWheelButtons >> 2) % 2;
+  return (kcan_data.steeringWheelButtons >> 2) % 2;
 }
 
 bool downPressed() {
-  return (data.steeringWheelButtons >> 3) % 2;
+  return (kcan_data.steeringWheelButtons >> 3) % 2;
 }
 
 bool telephonePressed() {
-  return (data.steeringWheelButtons >> 4) % 2;
+  return (kcan_data.steeringWheelButtons >> 4) % 2;
 }
 
 bool voicePressed() {
-  return (data.steeringWheelButtons >> 5) % 2;
+  return (kcan_data.steeringWheelButtons >> 5) % 2;
 }
 
 bool rotatePressed() {
-  return (data.steeringWheelButtons >> 6) % 2;
+  return (kcan_data.steeringWheelButtons >> 6) % 2;
 }
 
 bool diskPressed() {
-  return (data.steeringWheelButtons >> 7) % 2;
+  return (kcan_data.steeringWheelButtons >> 7) % 2;
 }
 
 
@@ -506,16 +520,16 @@ void drawMixedDash() {
     u8g2.drawStr(81, 38, outputStr);
 
     // Clutch status
-    u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
+    u8g2.drawButtonUTF8(32, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (kcan_data.clutchPressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Clutch" );
 
     // Brake status
-    u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
+    u8g2.drawButtonUTF8(96, 50, U8G2_BTN_HCENTER | U8G2_BTN_BW1 | (kcan_data.brakePressed ? U8G2_BTN_INV : 0), 62,  0,  1, "Brake" );
 
     // Throttle position
-    u8g2.drawBox(0, 55, round(data.throttlePercentage * 128.0f), 5);
+    u8g2.drawBox(0, 55, round(kcan_data.throttlePercentage * 128.0f), 5);
 
     // Steering position
-    int16_t barWidth = -round(data.steeringPosition * 64.0f);
+    int16_t barWidth = -round(kcan_data.steeringPosition * 64.0f);
     if(barWidth >= 0) {
       u8g2.drawBox(64, 61, barWidth, 3);
     } else {
@@ -528,8 +542,8 @@ void drawMixedDash() {
 // displays fuel levels
 void drawFuelInfo() {
   // max fuel is about 62 liters which we will map to a height of 32 pixels (about half of the display)
-  int16_t level1Height = 63 - (int16_t)round(data.fuelLevel1 * (32.0f/62.0f));
-  int16_t level2Height = 63 - (int16_t)round(data.fuelLevel2 * (32.0f/62.0f));
+  int16_t level1Height = 63 - (int16_t)round(kcan_data.fuelLevel1 * (32.0f/62.0f));
+  int16_t level2Height = 63 - (int16_t)round(kcan_data.fuelLevel2 * (32.0f/62.0f));
   int16_t textHeight = 52; // alternatively: this puts text above fuel level but may collide with new text on top: level1Height < level2Height ? level1Height - 1 : level2Height - 1;
   char outputStr[15];
 
@@ -619,8 +633,8 @@ void drawSpeeds() {
   char outputStr[6];
 
   // 1 g translates to 40 pixels
-  int16_t xOffset = (int16_t)round((data.accelerationCross / 9.81f) * 40.0f);
-  int16_t yOffset = (int16_t)round((data.accelerationLong / 9.81f) * 40.0f);
+  int16_t xOffset = (int16_t)round((kcan_data.accelerationCross / 9.81f) * 40.0f);
+  int16_t yOffset = (int16_t)round((kcan_data.accelerationLong / 9.81f) * 40.0f);
 
   u8g2.firstPage();
   do {
@@ -664,7 +678,7 @@ void drawSpeeds() {
 
 // always the last page
 void drawSelectorScreen() {
-  char outputStr[13];
+  char outputStr[17];
 
   u8g2.firstPage();
   do {
@@ -682,6 +696,10 @@ void drawSelectorScreen() {
     u8g2.drawStr(1, 38, "LED brightness");
     getLedRingBrightnessPercentageStr(outputStr);
     u8g2.drawStr(104, 38, outputStr);
+
+    u8g2.drawStr(1, 48, "SD");
+    getSdCardStr(outputStr);
+    u8g2.drawStr(38, 48, outputStr);
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );

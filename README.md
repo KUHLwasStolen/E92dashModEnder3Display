@@ -32,12 +32,12 @@ Do this at your own risk.
 
 ## Additions to the ecosystem  
 My plan is to eventually extend this system with more devices in the car.  
-Once these projects are started I will link them here  
-Planned:  
+Once these projects are started I will link them here.  
+Planned (in that order):  
 - Wireless "scroll wheel"
     - *BMW iDrive*-inspired controller for the LCD
-    - uses a magnetic encoder to replace the low-quality one on the LCD
-    - (?dedicated media buttons?)
+    - uses a magnetic encoder to "replace" the low-quality one on the LCD
+    - dedicated media buttons
 - Bluetooth audio adapter
     - Bluetooth to AUX media player
     - optionally integrates into the system to be controlled by other devices and even the car (through the other devices/detected buttons presses/...)
@@ -76,10 +76,10 @@ From my testing during development, this approach has been very reliable and als
 | 0x1D0 | Engine-temperature, (intake) air pressure | **Yes** |
 | 0x1D6 | Steering wheel buttons, as not all of them do something in my car | **Yes**, except for disk button (not a top priority though) |
 | 0x2F8 | Time and date information | **Yes** |
-| 0x3B0 | Reverse gear status | to be tested |
 | 0x330 | Range | **Yes** |
 | 0x349 | Fuel level sensors (car has two) | **Yes** |
 | 0x362 | Average fuel consumption, avg. speed | **Yes** |
+| 0x3B0 | Reverse gear status | to be tested |
 | 0x3B4 | Battery voltage | **Yes** |
 
 ## Execution of the plan
@@ -113,8 +113,11 @@ Any constructive input on how to improve the schematic is greatly appreciated!
 (Yes, most slicers are able to use .step files, most people are not aware of this).  
 All of the models are in their perfect printing orientation and do not *need* supports.  
 The only place where you might need a tiny bit of support is [this](cad/exports/SenderModels/Enclosure_bottom.step) model, on the small, straight overhang for the screw terminal.  
+<img src="pictures/Enclosure_bottom_supports.png" alt="Enclosure_bottom support example" width="300"/>  
 
-<img src="pictures/Enclosure_bottom_supports.png" alt="Enclosure_bottom support example" width="300"/>
+The models include a lot of screw holes which are made to be tapped.  
+Ideally you would use a thread tap for this, but you can also probably just cut the thread by screwing in the bolt that is supposed to go there.  
+Tapped threads in 3D-prints are surprisingly strong and durable. They are a great way to easily put threads in all kinds of places/orientations.  
 
 ## Logging
 As mentioned above, the project offers optional logging capability.  
