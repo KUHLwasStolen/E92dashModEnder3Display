@@ -141,15 +141,12 @@ void setup() {
 
   for(uint8_t i = 0; i < 3 * PIXEL_COUNT; i++) {
     ledRing.clear();
-    ledRing.setPixelColor(i % PIXEL_COUNT, ledRing.gamma32(standardColor));
     ledRing.setBrightness(ledBrightness);
+    ledRing.setPixelColor(i % PIXEL_COUNT, ledRing.gamma32(standardColor));
     ledRing.show();
 
     delay(83);
   }
-  ledRing.fill(ledRing.gamma32(standardColor), 0, PIXEL_COUNT);
-  ledRing.setBrightness(ledBrightness);
-  ledRing.show();
 
   xTaskCreatePinnedToCore(
                     renderingTaskCode,    // Task function

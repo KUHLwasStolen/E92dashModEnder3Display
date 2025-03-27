@@ -63,7 +63,6 @@ mcp2515_can CAN(CAN_CS_PIN);
 
 SPIClass hspi(HSPI);
 bool loggingModule = false;
-uint64_t sdDataSent = 0;
 
 TaskHandle_t DataTask;
 TaskHandle_t SenderTask;
@@ -266,15 +265,23 @@ void senderTaskCode(void * params) {
   Serial.print("Sender task running on core ");
   Serial.println(xPortGetCoreID());
 
-  // check if module is installed here and not in loop to avoid checking too often
+  // check if module is installed here and not in loop to avoid checking in every iteration
   if(loggingModule) {
+    uint64_t sdDataSent = 0;
+
+    delay(500); // wait a bit for receiver to get ready
+    sd_data.usedMiB = SD.usedBytes() / (1024 * 1024);
+    sd_data.totalMiB = SD.totalBytes() / (1024 * 1024);
+    esp_now_send(LCDreceiverAddress, (uint8_t*)&sd_data, sizeof(sd_data));
+    sdDataSent = millis();
+
     while(1) {
       esp_now_send(LCDreceiverAddress, (uint8_t *)&kcan_data, sizeof(kcan_data));
 
       if(millis() - sdDataSent >= 60000) {
         sd_data.usedMiB = SD.usedBytes() / (1024 * 1024);
         sd_data.totalMiB = SD.totalBytes() / (1024 * 1024);
-        esp_now_send(LCDreceiverAddress, (uint8_t *)&sd_data, sizeof(sd_data));
+        esp_now_send(LCDreceiverAddress, (uint8_t*)&sd_data, sizeof(sd_data));
         sdDataSent = millis();
       }
 
@@ -282,7 +289,7 @@ void senderTaskCode(void * params) {
     }
   } else {
     while(1) {
-      esp_now_send(LCDreceiverAddress, (uint8_t *)&kcan_data, sizeof(kcan_data));
+      esp_now_send(LCDreceiverAddress, (uint8_t*)&kcan_data, sizeof(kcan_data));
 
       delay(lastSendStatus != 0 ? 1000 : 55); // longer delay between unsuccessful sends to avoid many unnecessary sends when receiver isn't ready yet
     }
