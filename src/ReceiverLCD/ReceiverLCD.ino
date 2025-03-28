@@ -3,6 +3,7 @@
 #include <SPI.h>
 #include <U8g2lib.h>
 #include <Adafruit_NeoPixel.h>
+#include <Preferences.h>
 
 #define EN2_PIN 23
 #define EN1_PIN 22
@@ -25,8 +26,9 @@
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN);
 uint8_t lcdState = 1; // see state numbers and meanings above
+uint8_t standardLcdState = lcdState; // used for displaying/setting standard state
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
-#define MAX_LINES 4 // max number of selectable line
+#define MAX_LINES 6 // max number of selectable line
 uint8_t selectedLine = 0; // for screens that use user selection
 
 // ## LED ring related
@@ -45,6 +47,15 @@ const uint8_t ledBrightnessStep = 7; // steps for increasing ledBrightness
 const uint32_t gearShiftColors[PIXEL_COUNT] = {ledRing.Color(0x2E, 0xFF, 0x11), ledRing.Color(0xB6, 0xFF, 0x00), ledRing.Color(0xFF, 0xF6, 0x00), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xE0, 0x30), ledRing.Color(0xFF, 0xD5, 0x00), ledRing.Color(0xFF, 0x60, 0x21), ledRing.Color(0xFF, 0x23, 0x23)};
 bool rpmBlinkOn = false;
 uint64_t lastBlinkChange = 0;
+
+// ## Preferences/settings related
+Preferences preferences;
+/* saved settings:
+standardValues {
+  lcdState: uint8_t
+  ledRingState: uint8_t
+  ledBrightness: uint8_t
+}                         */
 
 // ## Task handles
 TaskHandle_t RenderingTask;
@@ -136,6 +147,14 @@ void setup() {
   ledRing.begin(); // initialize LEDs
   ledRing.show(); // initialize pixels to off
 
+  // get last saved preferences
+  preferences.begin("standardValues", true);
+  lcdState = preferences.getUChar("lcdState", lcdState);
+  standardLcdState = lcdState;
+  ledRingState = preferences.getUChar("ledRingState", ledRingState);
+  ledBrightness = preferences.getUChar("ledBrightness", ledBrightness);
+  preferences.end();
+
   // display BMW logo and 1 ms later start ledRing animation
   showStartupLogo(1);
 
@@ -206,6 +225,20 @@ void userInputTaskCode(void * params) {
             case 3: // "LED brightness"
               Serial.println("Changing LED ring brightness");
               ledBrightness = (ledBrightness + ledBrightnessStep) % (maxLedBrightness + ledBrightnessStep);
+            break;
+
+            case 4: // standard LCD state
+              Serial.println("Changing standard LCD state");
+              standardLcdState = (standardLcdState + 1) % LCDSTATE_COUNT;
+            break;
+
+            case 5: // save settings
+              Serial.println("Saving settings");
+              preferences.begin("standardValues", false);
+              preferences.putUChar("lcdState", standardLcdState);
+              preferences.putUChar("ledRingState", ledRingState);
+              preferences.putUChar("ledBrightness", ledBrightness);
+              preferences.end();
             break;
           }
         break;
@@ -452,8 +485,34 @@ void getLedRingBrightnessPercentageStr(char* percentageStr) {
   sprintf(percentageStr, "%3d%%", (int)(float(ledBrightness * 100) / float(maxLedBrightness)));
 }
 
-void getSdCardStr(char* SdStr) {
-  sprintf(SdStr, "%5u/%5u MiB", sd_data.usedMiB, sd_data.totalMiB);
+void getSdCardStr(char* sdStr) {
+  sprintf(sdStr, "%5u/%5u MiB", sd_data.usedMiB, sd_data.totalMiB);
+}
+
+void getLcdStateStr(char* stateStr, uint8_t index) {
+  switch(index) {
+    case LCD_OFF_STATE:
+      sprintf(stateStr, "      off");
+    break;
+ 
+    case MIXED_DASH_STATE:
+      sprintf(stateStr, "    mixed");
+    break;
+    
+    case SPEED_ACCEL_STATE:
+      sprintf(stateStr, "accel/sp.");
+    break;
+
+    case FUEL_INFO_STATE:
+      sprintf(stateStr, "     fuel");
+    break;
+
+    case PDC_SENSOR_STATE:
+      sprintf(stateStr, "      PDC");
+    break;
+
+    default: sprintf(stateStr, "      N/A");
+  }
 }
 
 
@@ -694,9 +753,15 @@ void drawSelectorScreen() {
     getLedRingBrightnessPercentageStr(outputStr);
     u8g2.drawStr(104, 38, outputStr);
 
-    u8g2.drawStr(1, 48, "SD");
+    u8g2.drawStr(1, 48, "Stand. LCD");
+    getLcdStateStr(outputStr, standardLcdState);
+    u8g2.drawStr(74, 48, outputStr);
+
+    u8g2.drawStr(1, 58, "Save settings");
+
+    u8g2.drawStr(1, 68, "SD");
     getSdCardStr(outputStr);
-    u8g2.drawStr(38, 48, outputStr);
+    u8g2.drawStr(38, 68, outputStr);
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );
