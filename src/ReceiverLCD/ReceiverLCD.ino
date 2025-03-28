@@ -28,7 +28,7 @@ U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, LCD_SCK_PIN, LCD_MOSI_PIN, LCD_CS_PIN)
 uint8_t lcdState = 1; // see state numbers and meanings above
 uint8_t standardLcdState = lcdState; // used for displaying/setting standard state
 #define LCDSTATE_COUNT 5 // number of available states of the lcd (another one is added automatically, selector screen)
-#define MAX_LINES 6 // max number of selectable line
+#define MAX_LINES 7 // max number of selectable line
 uint8_t selectedLine = 0; // for screens that use user selection
 
 // ## LED ring related
@@ -118,6 +118,7 @@ void setup() {
 
   u8g2.begin(); // initialize lcd
   u8g2.setFont(u8g2_font_6x10_mr);
+  u8g2.clear();
 
 
   // Setup WIFI mode and print MAC address
@@ -240,6 +241,11 @@ void userInputTaskCode(void * params) {
               preferences.putUChar("ledBrightness", ledBrightness);
               preferences.end();
             break;
+
+            case 6: // Restart ESP
+              Serial.println("Rebooting...");
+              ESP.restart();
+            break;
           }
         break;
         
@@ -308,6 +314,8 @@ void renderingTaskCode(void * params) {
   Serial.println(xPortGetCoreID());
 
   // Variables used for automatically switching to PDC screen when parking
+  for(uint8_t i = 0; i < 8; i++)
+    kcan_data.PDCsensors[i] = 255;
   uint8_t minPDC = 255, newMinPDC = 255, lastLcdState = lcdState;
   bool lastReversed = kcan_data.reversed;
 
@@ -735,33 +743,43 @@ void drawSpeeds() {
 // always the last page
 void drawSelectorScreen() {
   char outputStr[17];
+  int16_t selectedOffset = -selectedLine * 10;
+
+  uint8_t lineYPositions[8] = {};
+
+  for(uint8_t i = 0; i < 8; i++) {
+    lineYPositions[i] = ((8 + (i * 10)) + selectedOffset) > 0 ? ((8 + (i * 10)) + selectedOffset) : 255;
+  }
 
   u8g2.firstPage();
   do {
     u8g2.setDrawColor(2); // XOR mode
 
-    u8g2.drawBox(0, 10 * selectedLine, u8g2.getDisplayWidth(), 10);
+    u8g2.drawBox(0, 0, u8g2.getDisplayWidth(), 10);
 
-    u8g2.drawStr(1, 8, "Next");
-    u8g2.drawStr(1, 18, "LCD off");
+    u8g2.drawStr(1, lineYPositions[0], "Next");
 
-    u8g2.drawStr(1, 28, "LED mode");
+    u8g2.drawStr(1, lineYPositions[1], "LCD off");
+
+    u8g2.drawStr(1, lineYPositions[2], "LED mode");
     getLedRingStateStr(outputStr);
-    u8g2.drawStr(62, 28, outputStr);
+    u8g2.drawStr(62, lineYPositions[2], outputStr);
 
-    u8g2.drawStr(1, 38, "LED brightness");
+    u8g2.drawStr(1, lineYPositions[3], "LED brightness");
     getLedRingBrightnessPercentageStr(outputStr);
-    u8g2.drawStr(104, 38, outputStr);
+    u8g2.drawStr(104, lineYPositions[3], outputStr);
 
-    u8g2.drawStr(1, 48, "Stand. LCD");
+    u8g2.drawStr(1, lineYPositions[4], "Stand. LCD");
     getLcdStateStr(outputStr, standardLcdState);
-    u8g2.drawStr(74, 48, outputStr);
+    u8g2.drawStr(74, lineYPositions[4], outputStr);
 
-    u8g2.drawStr(1, 58, "Save settings");
+    u8g2.drawStr(1, lineYPositions[5], "Save settings");
 
-    u8g2.drawStr(1, 68, "SD");
+    u8g2.drawStr(1, lineYPositions[6], "Restart ESP");
+
+    u8g2.drawStr(1, lineYPositions[7], "SD");
     getSdCardStr(outputStr);
-    u8g2.drawStr(38, 68, outputStr);
+    u8g2.drawStr(38, lineYPositions[7], outputStr);
 
     u8g2.setDrawColor(1); // normal mode
   } while( u8g2.nextPage() );
