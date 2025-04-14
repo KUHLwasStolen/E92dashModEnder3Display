@@ -313,31 +313,22 @@ void renderingTaskCode(void * params) {
   Serial.print("Rendering task running on core ");
   Serial.println(xPortGetCoreID());
 
-  // Variables used for automatically switching to PDC screen when parking
-  for(uint8_t i = 0; i < 8; i++)
-    kcan_data.PDCsensors[i] = 255;
-  uint8_t minPDC = 255, newMinPDC = 255, lastLcdState = lcdState;
+  uint8_t lastLcdState = lcdState;
   bool lastReversed = kcan_data.reversed;
 
   while(1) {
-    for(uint8_t i = 0; i < 8; i++)
-      if(kcan_data.PDCsensors[i] < newMinPDC) newMinPDC = kcan_data.PDCsensors[i];
-
     if(lcdState != PDC_SENSOR_STATE
-        && ((newMinPDC < 200 && minPDC > 200)
-            || (kcan_data.reversed == true && lastReversed == false))) {
+        && (kcan_data.reversed == true && lastReversed == false)) {
 
       lastLcdState = lcdState;
       lcdState = PDC_SENSOR_STATE;
-      
+
     } else if(lcdState == PDC_SENSOR_STATE
-              && (newMinPDC > 200 && minPDC < 200
-                  || (kcan_data.reversed == false && lastReversed == true))) {
+              && (kcan_data.reversed == false && lastReversed == true)) {
 
       lcdState = lastLcdState;
     }
-
-    minPDC = newMinPDC;
+    
     lastReversed = kcan_data.reversed;
 
     updateDisplay();
