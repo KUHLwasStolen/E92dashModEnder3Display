@@ -7,7 +7,7 @@
 
 #define CAN_CS_PIN 5
 
-#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, also change it in the receiver code!
+#define ESP_NOW_CHANNEL 1 // if you change this you have to change this on all devices
 
 #define SD_MISO 13
 #define SD_SCLK 14

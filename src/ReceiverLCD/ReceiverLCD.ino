@@ -62,7 +62,7 @@ TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
 
 // ## ESP-NOW RELATED
-#define ESP_NOW_CHANNEL 7 // this was chosen randomly, if you experience instability you might have to tune this, !!!also change it in the sender code!!!
+#define ESP_NOW_CHANNEL 1 // if you change this you have to change this on all devices
 
 typedef struct kcan_data_t {
   bool clutchPressed;
@@ -93,15 +93,22 @@ typedef struct sd_data_t {
   uint16_t totalMiB;
 } sd_data_t;
 
+typedef struct scroller_data_t {
+  int8_t rotation; // positive -> clockwise steps, negative -> counter-clockwise steps
+} scroller_data_t;
+
 kcan_data_t kcan_data;
 sd_data_t sd_data = {0, 0};
+scroller_data_t scroller_data = {0};
 
 // executed when data is received
 void OnDataRecv(const uint8_t * mac, const uint8_t * incomingData, int32_t len) {
   if(len == sizeof(kcan_data)) {
     memcpy(&kcan_data, incomingData, sizeof(kcan_data));
-  } else {
+  } else if(len == sizeof(sd_data)) {
     memcpy(&sd_data, incomingData, sizeof(sd_data));
+  } else if(len == sizeof(scroller_data)) {
+    memcpy(&scroller_data, incomingData, sizeof(scroller_data));
   }
 }
 
@@ -301,6 +308,18 @@ void userInputTaskCode(void * params) {
     if(diskPressed()) {
       pressed = true;
       Serial.println("Disk button (steering wheel) pressed");
+    }
+
+
+    // Scroller module events
+    if(scroller_data.rotation != 0) {
+      if(scroller_data.rotation < 0 && -scroller_data.rotation > selectedLine) {
+        selectedLine = 0;
+      } else {
+        selectedLine = min(MAX_LINES - 1, selectedLine + scroller_data.rotation);
+      }
+
+      scroller_data.rotation = 0;
     }
 
     delay(pressed ? 450 : 1); // if pressed avoid multiple triggers, if not yield

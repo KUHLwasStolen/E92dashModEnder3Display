@@ -1,9 +1,10 @@
-# E92dashModEnder3Screen
-Chaotic name, simple mission.  
+# open-eye-drive-screen
 I have the old LCD from my Creality Ender 3 Pro, which I don't need anymore, because I'm running it headless with Klipper and I want to use it to display some additional information on the dash of my BMW E92.  
 Additionally the project comes with an optional/modular data logger addon, to record the sniffed telemetry data.  
 
-The project should be compatible with all cars from the E9x series, but I only have access to an E92, which is why I named the repository like that.  
+But don't get distracted by this project while on the road. Always drive with an *open-eye* :)  
+
+The project should be compatible with all cars from the E9x series, but I only have access to an E92 for testing.  
 
 On the left you can see the receiver/LCD module mounted in the car and on the right the sender/logging module mounted in the trunk of my E92.  
 <img src="pictures/receiverMountTest.jpg" alt="picture of the receiver module mounted in the car" width="350"/> <img src="pictures/SenderInstalledTrimHanger.jpg" alt="picture of the installed sender module" width="350"/>  
@@ -34,7 +35,7 @@ Do this at your own risk.
 My plan is to eventually extend this system with more devices in the car.  
 Once these projects are started I will link them here.  
 Planned (in that order):  
-- Wireless "scroll wheel"
+- [Wireless "scroll wheel"](https://github.com/KUHLwasStolen/open-eye-drive-scroller)
     - *BMW iDrive*-inspired controller for the LCD
     - uses a magnetic encoder to "replace" the low-quality one on the LCD
     - dedicated media buttons
@@ -79,7 +80,7 @@ From my testing during development, this approach has been very reliable and als
 | 0x330 | Range | **Yes** |
 | 0x349 | Fuel level sensors (car has two) | **Yes** |
 | 0x362 | Average fuel consumption, avg. speed | **Yes** |
-| 0x3B0 | Reverse gear status | to be tested |
+| 0x3B0 | Reverse gear status | **Yes** |
 | 0x3B4 | Battery voltage | **Yes** |
 
 ## Execution of the plan
