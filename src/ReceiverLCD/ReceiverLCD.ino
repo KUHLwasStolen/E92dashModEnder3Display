@@ -61,7 +61,7 @@ standardValues {
 TaskHandle_t RenderingTask;
 TaskHandle_t UserInputTask;
 
-// ## ESP-NOW RELATED
+// ## ESP-NOW related
 #define ESP_NOW_CHANNEL 1 // if you change this you have to change this on all devices
 
 typedef struct kcan_data_t {
@@ -95,6 +95,7 @@ typedef struct sd_data_t {
 
 typedef struct scroller_data_t {
   int8_t rotation; // positive -> clockwise steps, negative -> counter-clockwise steps
+  uint8_t buttons; // each bit one button (use functions below): 2^0=pause, 2^1=next, 2^2=prev, 2^3=click, 2^4=right, 2^5=left
 } scroller_data_t;
 
 kcan_data_t kcan_data;
@@ -207,9 +208,9 @@ void userInputTaskCode(void * params) {
 
   while(1) {
     // Encoder button
-    if(digitalRead(ENC_PIN) == 0) {
+    if(digitalRead(ENC_PIN) == 0 || clickPressed()) {
       pressed = true;
-      Serial.println("Encoder button pressed");
+      Serial.println("Encoder/Click button pressed");
       
       // only need to handle states with special cases
       switch(lcdState) {
@@ -256,14 +257,8 @@ void userInputTaskCode(void * params) {
           }
         break;
         
-        case 0: // turn on LCD and switch to next screen (!no break here!)
-          Serial.println("Turning on LCD");
-          digitalWrite(LCD_POWER_PIN, HIGH);
-          delay(30); // give it a bit of time to turn on again
-          u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
-        
-        default: // show next screen
-          lcdState = (lcdState + 1) % (LCDSTATE_COUNT + 1);
+        default:
+          nextScreen();
       }
     }
 
@@ -277,37 +272,33 @@ void userInputTaskCode(void * params) {
 
 
     // Steering wheel buttons
-    if(volumeUpPressed()) {
+    if(kcan_data.steeringWheelButtons != 0) {
       pressed = true;
-      Serial.println("Volume up (steering wheel) pressed");
-    }
-    if(volumeDownPressed()) {
-      pressed = true;
-      Serial.println("Volume down (steering wheel) pressed");
-    }
-    if(upPressed()) {
-      pressed = true;
-      Serial.println("Up button (steering wheel) pressed");
-    }
-    if(downPressed()) {
-      pressed = true;
-      Serial.println("Down button (steering wheel) pressed");
-    }
-    if(telephonePressed()) {
-      pressed = true;
-      Serial.println("Telephone button (steering wheel) pressed");
-    }
-    if(voicePressed()) {
-      pressed = true;
-      Serial.println("Voice button (steering wheel) pressed");
-    }
-    if(rotatePressed()) {
-      pressed = true;
-      Serial.println("Rotate button (steering wheel) pressed");
-    }
-    if(diskPressed()) {
-      pressed = true;
-      Serial.println("Disk button (steering wheel) pressed");
+
+      if(volumeUpPressed()) {
+        Serial.println("Volume up (steering wheel) pressed");
+      }
+      if(volumeDownPressed()) {
+        Serial.println("Volume down (steering wheel) pressed");
+      }
+      if(upPressed()) {
+        Serial.println("Up button (steering wheel) pressed");
+      }
+      if(downPressed()) {
+        Serial.println("Down button (steering wheel) pressed");
+      }
+      if(telephonePressed()) {
+        Serial.println("Telephone button (steering wheel) pressed");
+      }
+      if(voicePressed()) {
+        Serial.println("Voice button (steering wheel) pressed");
+      }
+      if(rotatePressed()) {
+        Serial.println("Rotate button (steering wheel) pressed");
+      }
+      if(diskPressed()) {
+        Serial.println("Disk button (steering wheel) pressed");
+      }
     }
 
 
@@ -322,7 +313,20 @@ void userInputTaskCode(void * params) {
       scroller_data.rotation = 0;
     }
 
-    delay(pressed ? 450 : 1); // if pressed avoid multiple triggers, if not yield
+    if(scroller_data.buttons != 0) {
+      pressed = true;
+
+      if(rightPressed()) {
+        nextScreen();
+      }
+      if(leftPressed()) {
+        prevScreen();
+      }
+
+      scroller_data.buttons = 0;
+    }
+
+    delay(pressed ? 400 : 1); // if pressed avoid multiple triggers, if not yield
     pressed = false;
   }
 }
@@ -535,7 +539,36 @@ void getLcdStateStr(char* stateStr, uint8_t index) {
 
 
 // ### Logic helper functions ###
-//  ## Convert steeringWheelButtons into bools
+//  ## Switch LCD screen ##
+void nextScreen() {
+  if(lcdState == 0) {
+    turnOnLcd();
+  }
+
+  lcdState = max(1, (lcdState + 1) % (LCDSTATE_COUNT + 1));
+}
+
+void prevScreen() {
+  if(lcdState == 0) {
+    turnOnLcd();
+  }
+
+  if(lcdState == 0 || lcdState == 1) {
+    lcdState = LCDSTATE_COUNT;
+    return;
+  }
+
+  lcdState -= 1;
+}
+
+void turnOnLcd() {
+  Serial.println("Turning on LCD");
+  digitalWrite(LCD_POWER_PIN, HIGH);
+  delay(30); // give it a bit of time to turn on again
+  u8g2.clear(); // clear display as sometimes there are artifacts when turning back on
+}
+
+//  ## Convert steeringWheelButtons into bools ##
 bool volumeUpPressed() {
   return kcan_data.steeringWheelButtons % 2;
 }
@@ -566,6 +599,31 @@ bool rotatePressed() {
 
 bool diskPressed() {
   return (kcan_data.steeringWheelButtons >> 7) % 2;
+}
+
+//  ## Convert scroller buttons into bools ##
+bool pausePressed() {
+  return scroller_data.buttons % 2;
+}
+
+bool nextSongPressed() {
+  return (scroller_data.buttons >> 1) % 2;
+}
+
+bool prevSongPressed() {
+  return (scroller_data.buttons >> 2) % 2;
+}
+
+bool clickPressed() {
+  return (scroller_data.buttons >> 3) % 2;
+}
+
+bool rightPressed() {
+  return (scroller_data.buttons >> 4) % 2;
+}
+
+bool leftPressed() {
+  return (scroller_data.buttons >> 5) % 2;
 }
 
 

@@ -2,9 +2,9 @@
 I have the old LCD from my Creality Ender 3 Pro, which I don't need anymore, because I'm running it headless with Klipper and I want to use it to display some additional information on the dash of my BMW E92.  
 Additionally the project comes with an optional/modular data logger addon, to record the sniffed telemetry data.  
 
-But don't get distracted by this project while on the road. Always drive with an *open-eye* :)  
-
 The project should be compatible with all cars from the E9x series, but I only have access to an E92 for testing.  
+
+Please make sure to not get distracted by this awesome project while on the road. Always drive with an *open-eye* :)  
 
 On the left you can see the receiver/LCD module mounted in the car and on the right the sender/logging module mounted in the trunk of my E92.  
 <img src="pictures/receiverMountTest.jpg" alt="picture of the receiver module mounted in the car" width="350"/> <img src="pictures/SenderInstalledTrimHanger.jpg" alt="picture of the installed sender module" width="350"/>  
